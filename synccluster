@@ -1,0 +1,1445 @@
+#!/bin/bash
+
+<<-DOC
+The MIT License (MIT)
+
+Copyright (c) 2016 Jean-Matthieu COULON
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+Sync cluster tool: synchronizes multiple debian distributions together.
+
+Configuration is in /etc/default/synccluster. Keep values the same between master and
+slave because most parts of the script suppose they are the same for all hosts.
+
+Backup directory has the following structure:
+
+BACKUPDIR/hostname/fs => Filesystem as-is
+BACKUPDIR/hostname/postgres.xz => compressed pg_dumpall of the pg database
+
+DOC
+
+set -e
+
+unset MASTER
+unset MASTER_USER
+unset LOCALDIR
+unset MASSDIR
+unset CLOUDDIR
+unset WWWDIR
+unset BACKUPDIR
+unset MAILDIR
+unset UNISON
+unset DOMAIN
+unset MAILRELAY
+
+# Load settings
+
+# Generate a synccluster file suitable for a new master
+default_synccluster() {
+  cat <<EOF
+MASTER='$MASTER'
+MASTER_USER='$MASTER_USER'
+LOCALDIR='/home/.local'
+MASSDIR='/home/.local/mass'
+CLOUDDIR='/home/.local/mass/owncloud/data'
+WWWDIR='/var/www'
+BACKUPDIR='/home/.local/backup'
+MAILDIR='/home/.local/mail'
+UNISON='/home/.local/unison'
+MIRROR='$MIRROR'
+DISTNAME='$DISTNAME'
+DOMAIN='$DOMAIN'
+MAILRELAY='$MAILRELAY'
+EOF
+}
+
+MIRROR="$(grep -E '^deb [hft]*tp://.*debian.* main' /etc/apt/sources.list | head -n 1 | sed 's;deb \([^ ]*\) [a-z/]* main.*;\1;')"
+DISTNAME="$(grep -E '^deb [hft]*tp://.*debian.* main' /etc/apt/sources.list | head -n 1 | sed 's;deb [^ ]* \([a-z/]*\) main.*;\1;')"
+eval "$(default_synccluster)"
+[ -e "/etc/default/synccluster" ] && . /etc/default/synccluster
+
+export PASSWORD=''
+export MASTER
+export MASTER_USER
+export LOCALDIR
+export MASSDIR
+export CLOUDDIR
+export WWWDIR
+export BACKUPDIR
+export MAILDIR
+export UNISON
+export MIRROR
+export DISTNAME
+export DOMAIN
+export MAILRELAY
+
+
+roundcube_version="1.1.4"
+owncloud_version="9.0.0"
+roundcube_url="http://downloads.sourceforge.net/project/roundcubemail/roundcubemail/$roundcube_version/roundcubemail-$roundcube_version-complete.tar.gz"
+owncloud_url="https://download.owncloud.org/community/owncloud-${owncloud_version}.tar.bz2"
+
+
+require_domain() {
+  [ "$DOMAIN" ] || DOMAIN="$1"
+  [ "$DOMAIN" ] || DOMAIN="$(dnsdomainname)"
+  [ "$DOMAIN" ] || read -p 'Enter domain name:' DOMAIN
+}
+
+require_mailrelay() {
+  [ "$MAILRELAY" ] || MAILRELAY="$1"
+  [ "$MAILRELAY" ] || read -p 'Enter e-mail relay host:' MAILRELAY
+}
+
+generate_synccluster_conf() {
+  local synccluster="$1"; [ "$synccluster" ] || synccluster="/etc/default/synccluster"; shift || true
+  require_domain
+  require_mailrelay
+  default_synccluster > "$synccluster"
+  . "$synccluster"
+}
+
+default_roundcube_conf() {
+  require_password
+  cat <<EOF
+\$config = array();
+\$config['smtp_debug'] = true;
+\$config['imap_debug'] = false;
+\$config['log_logins'] = false;
+\$config['log_session'] = false;
+\$config['db_dsnw'] = 'pgsql://roundcubemail:${PASSWORD}roundcubemail@127.0.0.1/roundcubemail'
+
+\$config['default_host'] = '$DOMAIN';
+\$config['default_port'] = 143;
+\$config['imap_auth_type'] = 'PLAIN';
+
+\$config['smtp_server'] = '$DOMAIN';
+\$config['smtp_port'] = 25;
+\$config['smtp_user'] = '%u';
+\$config['smtp_pass'] = '%p';
+\$config['smtp_auth_type'] = 'PLAIN';
+
+\$config['support_url'] = '';
+\$config['product_name'] = 'Roundcube Webmail';
+\$config['des_key'] = '9j!eitu()""@551hdkcoeoze';
+
+\$config['plugins'] = array(
+    'archive',
+    'zipdownload',
+    'carddav',
+);
+
+\$config['skin'] = 'larry';
+EOF
+}
+
+require_password() {
+  if [ -z "$PASSWORD" ]; then
+    p1=a
+    p2=b
+    while [ "$p1" != "$p2" ]; do
+      read -p "Enter master password:" -s p1
+      echo ''
+      read -p "Confirm master password:" -s p2
+      echo ''
+      [ "$p1" = "$p2" ] || echo "Passwords do not match, please try again"
+    done
+    PASSWORD="$p1"
+  fi
+}
+
+git_get() {
+  local url="$1"
+  local target="$2"
+  if [ -d "$target/.git" ]; then
+    pushd "$target" &>/dev/null
+    git clean -dfx
+    git pull
+    popd &>/dev/null
+  elif [ -d "$target" ]; then
+    rm -rf "$target"
+    git clone "$url" "$target"
+  else
+    git clone "$url" "$target"
+  fi
+}
+
+setup_sudo() {
+  require_packages sudo
+
+  cat >> /etc/sudoers <<EOF
+root   ALL=NOPASSWD: ALL
+%sudo   ALL=NOPASSWD: ALL
+EOF
+
+  sed -i "s;^sudo:x:\\([0-9]*\\):\\([a-zA-Z0-9].*\\);sudo:x:\\1:\\2,$(grep -E ':x:100[0-9][0-9]:' /etc/passwd | cut -d: -f1 | tr '\n' ',' | sed 's/,$//');" /etc/group
+  sed -i "s;^sudo:x:\\([0-9]*\\):$;sudo:x:\\1:\\2,$(grep -E ':x:100[0-9][0-9]:' /etc/passwd | cut -d: -f1 | tr '\n' ',' | sed 's/,$//');" /etc/group
+}
+
+install_roundcube() {
+  require_password
+  require_apache_php
+  require_postgresql
+  [ -e /tmp/roundcube.tar.gz ] || wget -O/tmp/roundcube.tar.gz "$roundcube_url"
+  rm -rf "$WWWDIR/roundcubemail-$roundcube_version" "$WWWDIR/roundcubemail"
+  tar -C "$WWWDIR" -xvzf /tmp/roundcube.tar.gz
+  ln -fs "roundcubemail-$roundcube_version" "$WWWDIR/roundcubemail"
+  pushd "$WWWDIR" &>/dev/null
+  su -c 'psql -c "DROP DATABASE IF EXISTS roundcubemail;"' postgres
+  su -c 'psql -c "DROP ROLE IF EXISTS roundcubemail";' postgres
+  su -c 'psql -c "CREATE USER roundcubemail WITH PASSWORD '\'"${PASSWORD}roundcubemail"\'';"' postgres
+  su -c 'psql -c "CREATE DATABASE roundcubemail OWNER=roundcubemail;"' postgres
+  PGPASSWORD="${PASSWORD}roundcubemail" psql -U roundcubemail -h localhost -p 5432 roundcubemail < "$WWWDIR/roundcubemail/SQL/postgres.initial.sql"
+  git_get https://github.com/blind-coder/rcmcarddav.git "$WWWDIR/plugins/carddav"
+  default_roundcube_conf > "$WWWDIR/roundcubemail/config/config.inc.php"
+  chown -R www-data:www-data "$WWWDIR/roundcubemail/logs"
+  chown -R www-data:www-data "$WWWDIR/roundcubemail/temp"
+  rm /tmp/roundcube.tar.gz
+  popd &>/dev/null
+}
+
+default_postfix_conf() {
+  cat <<EOF
+alias_database = hash:/etc/aliases
+alias_maps = hash:/etc/aliases
+append_dot_mydomain = no
+biff = no
+config_directory = /etc/postfix
+inet_interfaces = all
+mailbox_command = procmail -f- -a "\$USER"
+mailbox_size_limit = 0
+mydestination = $DOMAIN, localhost
+myhostname = $DOMAIN
+mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128
+myorigin = /etc/mailname
+readme_directory = no
+recipient_delimiter = +
+relayhost = $MAILRELAY
+smtp_tls_session_cache_database = btree:\${data_directory}/smtp_scache
+smtpd_banner = \$myhostname ESMTP \$mail_name (Debian/GNU)
+smtpd_relay_restrictions = permit_mynetworks permit_sasl_authenticated reject_unauth_destination
+smtpd_sasl_auth_enable = yes
+smtpd_sasl_authenticated_header = yes
+smtpd_sasl_local_domain = \$myorigin
+smtpd_sasl_path = private/auth
+smtpd_sasl_security_options = noanonymous
+smtpd_sasl_type = dovecot
+smtpd_tls_cert_file = /etc/ssl/certs/ssl-cert-snakeoil.pem
+smtpd_tls_key_file = /etc/ssl/private/ssl-cert-snakeoil.key
+smtpd_tls_session_cache_database = btree:\${data_directory}/smtpd_scache
+smtpd_use_tls = yes
+EOF
+}
+install_postfix() {
+  require_packages postfix
+  local target="$1"; [ "$target" ] || target="/etc/postfix"; shift || true
+  if [ -e "$target/main.cf" ]; then
+    mv "$target/main.cf" "$target/main.cf.old"
+  fi
+  require_mailrelay
+  require_domain
+  default_postfix_conf > "$target/main.cf"
+  echo "$DOMAIN" > /etc/mailname
+  [ -d "$MAILDIR" ] || mkdir -p "$MAILDIR"
+  chmod 1777 "$MAILDIR"
+  systemctl restart postfix
+}
+
+default_dovecot_conf() {
+  cat <<EOF
+disable_plaintext_auth = no
+mail_privileged_group = mail
+mail_home = $MAILDIR/%u
+mail_location = maildir:$MAILDIR/%u/Maildir:LAYOUT=fs
+userdb {
+  driver = passwd
+}
+passdb {
+  args = %s
+  driver = pam
+}
+protocols = "imap"
+protocol imap {
+}
+plugin {
+  autocreate = Trash
+  autocreate2 = Sent
+  autosubscribe = Trash
+  autosubscribe2 = Sent
+}
+service auth {
+  unix_listener /var/spool/postfix/private/auth {
+    group = postfix
+    mode = 0660
+    user = postfix
+  }
+}
+auth_mechanisms = plain login
+ssl = yes
+ssl_cert = </etc/ssl/certs/ssl-cert-snakeoil.pem
+ssl_key = </etc/ssl/private/ssl-cert-snakeoil.key
+ssl_cipher_list = ALL:!LOW:!SSLv2:ALL:!aNULL:!ADH:!eNULL:!EXP:RC4+RSA:+HIGH:+MEDIUM
+EOF
+}
+install_dovecot() {
+  require_packages dovecot-imapd
+  local target="$1"; [ "$target" ] || target="/etc/dovecot"; shift || true
+  if [ -e "$target/dovecot.conf" ]; then
+    mv "$target/dovecot.conf" "$target/dovecot.conf.old"
+  fi
+  default_dovecot_conf > "$target/dovecot.conf"
+  systemctl restart dovecot
+}
+
+install_owncloud() {
+  require_password
+  require_apache_php
+  require_postgresql
+  [ -e /tmp/owncloud.tar.bz2 ] || wget -O/tmp/owncloud.tar.bz2 "$owncloud_url"
+  rm -rf "$WWWDIR/owncloud"
+  dir "$CLOUDDIR"
+  tar -C "$WWWDIR" -xvjf /tmp/owncloud.tar.bz2
+  chown -R www-data:www-data "$WWWDIR/owncloud/apps"
+  chown -R www-data:www-data "$WWWDIR/owncloud/config"
+  chown -R www-data:www-data "$CLOUDDIR"
+  chown -R www-data:www-data "$WWWDIR/owncloud/themes"
+  pushd "$WWWDIR/owncloud" &>/dev/null
+  su -c 'psql -c "DROP DATABASE IF EXISTS owncloud;"' postgres
+  su -c 'psql -c "DROP ROLE IF EXISTS owncloud";' postgres
+  su -c 'psql -c "CREATE USER owncloud WITH PASSWORD '\'"${PASSWORD}owncloud"\''";' postgres
+  su -c 'psql -c "CREATE DATABASE owncloud OWNER=owncloud;"' postgres
+  trap "sed -i 's;^\\(www-data:.*:\\).*;\\1/usr/sbin/nologin;' /etc/passwd" EXIT
+  sed -i 's;^\(www-data:.*:\).*;\1/bin/bash;' /etc/passwd
+  su -c "php occ maintenance:install --database pgsql --database-name owncloud --database-host localhost --database-user owncloud --database-pass ${PASSWORD}owncloud --admin-user admin --admin-pass ${PASSWORD}admin --data-dir $CLOUDDIR" www-data
+  git_get "https://github.com/owncloud/contacts.git" "$WWWDIR/owncloud/apps/contacts"
+  chown -R root:www-data "$CLOUDDIR/.htaccess"
+  chown -R root:www-data "$WWWDIR/owncloud/.htaccess"
+  su -c "$WWWDIR/owncloud/occ app:enable external" www-data
+  su -c "$WWWDIR/owncloud/occ app:enable files_external" www-data
+  su -c "$WWWDIR/owncloud/occ app:enable user_external" www-data
+  su -c "$WWWDIR/owncloud/occ app:enable contacts" www-data
+  head -n -1 "$WWWDIR/owncloud/config/config.php" > /tmp/config.php
+  cat >> /tmp/config.php <<EOF
+  'memcache.local' => '\\\\OC\\\\Memcache\\\\APCu',
+  'user_backends' => 
+  array (
+    0 => 
+    array (
+      'class' => 'OC_User_IMAP',
+      'arguments' => 
+      array (
+        0 => '{localhost:143/imap/tls/novalidate-cert}INBOX',
+      ),
+    ),
+  ),
+);
+EOF
+  sed -i "s/    0 => 'localhost',/    0 => '$DOMAIN',/" /tmp/config.php
+  chown www-data:www-data /tmp/config.php
+  mv /tmp/config.php "$WWWDIR/owncloud/config/config.php"
+  sed -i 's;^\(www-data:.*:\).*;\1/usr/sbin/nologin;' /etc/passwd
+  trap EXIT
+  rm /tmp/owncloud.tar.bz2
+  popd &>/dev/null
+}
+
+restore_master() {
+  local host="$(hostname -f)"
+  local src="$1"; [ "$src" ] || src="$BACKUPDIR/$host"; shift || true
+
+  if [ "${src#*:}" = "$src" ] && ! [ -d "$src" ]; then
+    echo "Cannot find source directory $src"
+    exit 1
+  fi
+
+  local skip_setup_master=''
+  if grep "MASTER=''" /etc/default/synccluster &>/dev/null; then
+    skip_setup_master=1
+  fi
+
+  if [ "${src#*:}" != "$src" ]; then
+    unset MASTER
+    unset MASTER_USER
+    require_packages rsync
+    require_master "${src%%:*}"
+    upload_ssh_key
+    fetch_master_conf
+  else
+    fetch_backup_conf "$src/fs/etc/default/synccluster"
+  fi
+
+  # Setup this machine as a master
+  [ "$skip_setup_master" ] || setup_master
+
+  echo "Restoring data from $src ..."
+  
+  generate_backup_rsync_list > "/tmp/rsync_list"
+
+  # Restore users
+  mkdir /tmp/newusers
+  rsync -a "$src/fs/etc/{passwd,shadow,group}" /tmp/newusers
+  grep -E ':x:100[0-9][0-9]:' /tmp/newusers/passwd >> /etc/passwd
+  grep -E ':x:100[0-9][0-9]:' /tmp/newusers/group >> /etc/group
+  grep -E ':x:100[0-9][0-9]:' /tmp/newusers/passwd | while IFS=':' read user pass uid gid name homedir shell; do
+    grep -E "^$user:" /tmp/newusers/shadow >> /etc/shadow
+    if ! [ -d "$homedir" ]; then
+      cp -a /etc/skel "$homedir"
+      chown -R "$uid:$gid" "$homedir"
+    fi
+  done
+  rm -r /tmp/newusers
+
+  rsync -aP --include-from="/tmp/rsync_list" "$src/fs/" "/"
+  if [ "${src#*:}" != "$src" ]; then
+    ssh "$MASTER_USER" "[ -e '${src#*:}/postgres.xz' ]" && ssh "$MASTER_USER" "cat '${src#*:}/postgres.xz'" | su -c "unxz -c | grep -Pv '^(?:CREATE|DROP|ALTER) ROLE postgres' | psql" postgres
+  elif [ -e "$src/postgres.xz" ]; then
+    su -c "unxz -c | grep -Pv '^(?:CREATE|DROP|ALTER) ROLE postgres' | psql" postgres < "$src/postgres.xz"
+  fi
+}
+
+generate_backup_rsync_list() {
+  cat <<EOF
+- *.o
+- .*.swp
+- [cC]ache
+- .[cC]ache
+- [lL]ock
+- .parentlock
+- *.nps
+- *~
+- .*~
+- .[tT]rash*
+- [tT]humbs.db
+- \$RECYCLE.BIN
+- Crash Reports
+- /**/Documents/HTC/**
++ /etc
++ /etc/aliases
++ /etc/mailname
++ $CLOUDDIR
++ $CLOUDDIR/**
++ $WWWDIR
++ $WWWDIR/**
++ $MAILDIR
++ $MAILDIR/**
++ $UNISON
++ $UNISON/**
++ /home
++ /home/[a-zA-Z0-9]*
++ /home/[a-zA-Z0-9]*/Bureau
++ /home/[a-zA-Z0-9]*/Bureau/**
++ /home/[a-zA-Z0-9]*/Documents
++ /home/[a-zA-Z0-9]*/Documents/**
++ /home/[a-zA-Z0-9]*/Images
++ /home/[a-zA-Z0-9]*/Images/**
++ /home/[a-zA-Z0-9]*/Modèles
++ /home/[a-zA-Z0-9]*/Modèles/**
++ /home/[a-zA-Z0-9]*/Musique
++ /home/[a-zA-Z0-9]*/Musique/**
++ /home/[a-zA-Z0-9]*/Vidéos
++ /home/[a-zA-Z0-9]*/Vidéos/**
++ /home/[a-zA-Z0-9]*/Jeux
++ /home/[a-zA-Z0-9]*/Jeux/**
++ /home/[a-zA-Z0-9]*/Logiciels
++ /home/[a-zA-Z0-9]*/Logiciels/**
++ /home/[a-zA-Z0-9]*/.config
++ /home/[a-zA-Z0-9]*/.config/**
++ /home/[a-zA-Z0-9]*/.mozilla
++ /home/[a-zA-Z0-9]*/.mozilla/**
++ /usr
++ /usr/local
++ /usr/local/**
++ /opt
++ /opt/**
+- $MASSDIR
+- $BACKUPDIR
+- *
+EOF
+}
+
+backup() {
+  local host="$(hostname -f)"
+  local src="$1"; [ "$src" ] || src="/"; shift || true
+  local target="$1"; [ "$target" ] || target="$BACKUPDIR/$host"; shift || true
+
+  dir "$target/fs"
+
+  # Create remote backup directory
+  unset MASTER
+  unset MASTER_USER
+  if [ "${target#*:}" != "$target" ]; then
+    require_master "${target%%:*}"
+    upload_ssh_key
+    ssh "$MASTER_USER" "[ -d '${target#*:}/fs' ] || mkdir -p '${target#*:}/fs'"
+  elif [ "${src#*:}" != "$src" ]; then
+    require_master "${src%%:*}"
+    upload_ssh_key
+  fi
+
+  # Synchronize files
+  generate_backup_rsync_list > "$target/rsync_list"
+  rsync -aP --delete --delete-excluded --include-from="$target/rsync_list" "$src/" "$target/fs/"
+
+  # Backup the database
+  pushd / &>/dev/null
+  if [ "${src#*:}" != "$src" ]; then
+    ssh "$MASTER_USER" \
+      "cd /; which pg_dumpall &>/dev/null && su -c 'pg_dumpall -c | xz -c -8 -e' postgres" > "$target/postgres.xz"
+    echo "Last successful backup at $(date)" > "$target/last_success"
+  elif [ "${target#*:}" != "$target" ]; then
+    su -c 'pg_dumpall -c | xz -c -8 -e' postgres | ssh "$MASTER_USER" "cat > '${target#*:}/postgres.xz'"
+    ssh "$MASTER_USER" 'echo "Last successful backup at $(date)" > "$target/last_success"'
+  else
+    su -c 'pg_dumpall -c | xz -c -8 -e' postgres > "$target/postgres.xz"
+    echo "Last successful backup at $(date)" > "$target/last_success"
+  fi
+  popd &>/dev/null
+}
+
+
+generate_apache_conf() {
+  local target="$1"; [ "$target" ] || target="/etc/apache2"; shift || true
+  cat > "$target"/conf-available/roundcubemail-local.conf <<EOF
+Alias /mail "$WWWDIR/roundcubemail/"
+
+<Directory "$WWWDIR/roundcubemail">
+    Options +FollowSymLinks
+    AllowOverride All
+
+    SetEnv HOME $WWWDIR/roundcubemail
+    SetEnv HTTP_HOME $WWWDIR/roundcubemail
+</Directory>
+EOF
+  ln -fs ../conf-available/roundcubemail-local.conf "$target"/conf-enabled/roundcubemail-local.conf
+
+  cat > "$target"/conf-available/owncloud-local.conf <<EOF
+Alias /cloud "$WWWDIR/owncloud/"
+Redirect 301 /owncloud /cloud
+
+<Directory "$WWWDIR/owncloud">
+    Options +FollowSymLinks
+    AllowOverride All
+
+    <IfModule mod_dav.c>
+      Dav off
+    </IfModule>
+
+    SetEnv HOME $WWWDIR/owncloud
+    SetEnv HTTP_HOME $WWWDIR/owncloud
+</Directory>
+
+<Directory "$WWWDIR/owncloud/data/">
+  # just in case if .htaccess gets disabled
+  Require all denied
+</Directory>
+
+Redirect 301 /.well-known/carddav /cloud/remote.php/carddav
+Redirect 301 /.well-known/caldav  /cloud/remote.php/caldav
+EOF
+  ln -fs ../conf-available/owncloud-local.conf "$target"/conf-enabled/owncloud-local.conf
+}
+
+update_php_ini() {
+  local target="$1"; [ "$target" ] || target=/etc/php5/apache2/php.ini; shift || true
+  sed -i 's/[ ;]*max_execution_time *= */max_execution_time = 600/' "$target"
+  sed -i 's/[ ;]*memory_limit *= */memory_limit = 256M/' "$target"
+  sed -i 's/[ ;]*post_max_size *= */post_max_size = 64M/' "$target"
+  sed -i 's/[ ;]*upload_max_filesize *= */upload_max_filesize = 2048M/' "$target"
+  sed -i 's/[ ;]*date.timezone *= */date.timezone = Europe\/Paris/' "$target"
+  sed -i 's/[ ;]*upload_max_filesize *= */upload_max_filesize = 2048M/' "$target"
+}
+
+dir() {
+  [ -e "$1" ] || mkdir -p "$1"
+}
+
+
+chroot_setup() {
+  TARGET="$1"
+  shift || true
+  if [ -e "$TARGET/var/log/bootstrap.log" ]; then
+    return
+  fi
+  if ! which debootstrap &>/dev/null; then
+    require_packages debootstrap
+  fi
+  debootstrap "$DISTNAME" "$TARGET" "$MIRROR"
+}
+
+shell() {
+  /bin/bash -i
+}
+
+enter_chroot() {
+    target="$1"
+    shift || true
+    cp "$0" "$target/synccluster"
+    chmod a+x "$target/synccluster"
+    trap "umount -l '$target/proc';umount -l '$target/sys';umount -l '$target/dev'" EXIT
+    mount --rbind "/proc" "$target/proc"
+    mount --rbind "/sys" "$target/sys"
+    mount --rbind "/dev" "$target/dev"
+    chroot "$target" "$@"
+    exit $?
+}
+ 
+if [ "${1%%=*}" = "--chroot" ]; then
+  target="${1#*=}"
+  shift || true
+
+  if [ "$UID" -ne 0 ]; then
+    echo "chroot mode needs to be root."
+    exit 1
+  fi
+
+  chroot_setup "$target"
+  enter_chroot "$target" /bin/bash /synccluster "$@"
+fi
+
+add_apt_sources() {
+cat > /etc/apt/sources.list.d/backports.list << EOF
+deb $MIRROR $DISTNAME-backports main contrib non-free
+deb-src $MIRROR $DISTNAME-backports main contrib non-free
+EOF
+cat > /etc/apt/sources.list.d/contrib.list << EOF
+deb $MIRROR $DISTNAME contrib non-free
+deb-src $MIRROR $DISTNAME contrib non-free
+EOF
+}
+
+require_packages() {
+  DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
+}
+
+install_base_packages() {
+add_apt_sources
+apt-get update
+require_packages \
+  rsync \
+  unison \
+  git \
+  bzip2 \
+  xz-utils \
+  ssh \
+  libnss-mdns \
+  avahi-daemon
+}
+
+install_synccluster_client_sync() {
+  cat > /etc/systemd/system/synccluster_client_sync.service <<EOF
+[Unit]
+Description=Refreshes client configuration from server
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/synccluster client_sync
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+  systemctl enable synccluster_client_sync.service
+}
+
+install_upnpc() {
+  require_packages miniupnpc
+  # Let's dig holes in the router !
+  cat > /etc/systemd/system/upnpc_refresh.service <<EOF
+[Unit]
+Description=Punches holes through NAT using UPnP
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/upnp_open 22 25 80 143 443 993
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  cat > /etc/systemd/system/upnpc_refresh.timer <<EOF
+[Unit]
+Description=Periodically update UPnP redirections
+
+[Timer]
+OnBootSec=0min
+OnCalendar=*:0/30
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+  systemctl daemon-reload
+  systemctl enable upnpc_refresh.service
+  systemctl enable upnpc_refresh.timer
+}
+
+install_modem() {
+  MODEM="$(ip route | awk '/^default/ { print $3 }')"
+  if wget -qO- "http://$MODEM"|grep '/goform/WebUiLanguageSelect' &>/dev/null; then
+    cat > /etc/systemd/system/update_modem.service <<EOF
+[Unit]
+Description=Refresh MODEM settings
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/update_modem
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    cat > /etc/systemd/system/update_modem.timer <<EOF
+[Unit]
+Description=Periodically update MODEM settings
+
+[Timer]
+OnBootSec=0min
+OnCalendar=daily
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+    cat > /usr/local/bin/update_modem <<'EOF'
+#!/bin/bash
+
+if [ "$1" = "--help" ]; then
+  echo "$0 [IP]"
+  echo "Updates LaBox settings on given IP address"
+  echo "If IP is omitted, uses default gateway IP"
+fi
+
+MODEM="$1"
+
+if [ -z "$MODEM" ]; then
+  MODEM="$(ip route | awk '/^default/ { print $3 }')"
+fi
+
+wget -qO/dev/null --header="Content-Type: application/x-www-form-urlencoded" --post-data="loginUsername=admin&loginPassword=password" http://"$MODEM"/goform/login
+
+wget -qO/dev/null --header="Content-Type: application/x-www-form-urlencoded" --post-data="RgLanIpAddress0=192&RgLanIpAddress1=168&RgLanIpAddress2=0&RgLanIpAddress3=1&RgDhcpServer=1&RgDhcpStartingIpAddress3=10&RgDhcpEndingIpAddress3=50&RgDhcpLeaseDuration=86400" http://"$MODEM"/goform/WebUiRgLanParam
+
+wget -qO/dev/null --header="Content-Type: application/x-www-form-urlencoded" --post-data="RgWiFiService=1&RgWiFiSSIDBroadcast=1&RgWiFiServiceChkBox=1&RgWiFiSSIDBroadcastChkBox=1&RgWiFiPrimSSID=jm&RgWiFiModeSelected=1&RgWiFiPowerOutputSelected=100&RgWiFiNBandWidthSelected=2&RgWiFiChannelSelected=0&PrimSecurityRadio=0&PrimSecurityRadioValue=0&GNSecurityRadioValue=0&PreSharedKey=QLBV66P1EF&PreSharedKey=&Wep128NetworkKey1=00000000000000000000000001&RgWiFiApplyConfigChanges=Appliquer" http://"$MODEM"/goform/WebUiRgWiFiConfig
+
+wget -qO/dev/null http://"$MODEM"/logout.html
+EOF
+    chmod a+x /usr/local/bin/update_modem
+  fi
+}
+
+require_apache_php() {
+if ! [ -d /etc/php5 ] || ! [ -d /etc/apache2 ]; then
+  require_packages \
+    apache2 \
+    libapache2-mod-php5 \
+    php5-cli \
+    php5-apcu \
+    php5-curl \
+    php5-fpm \
+    php5-gd \
+    php5-imap \
+    php5-pgsql
+fi
+generate_apache_conf
+update_php_ini
+}
+
+require_postgresql() {
+if ! [ -d /etc/postgresql ]; then
+  require_packages \
+    postgresql \
+    postgresql-contrib
+fi
+}
+
+install_bluetooth() {
+  require_packages bluetooth
+  cat > /etc/systemd/system/bluetooth_power.service <<EOF
+[Unit]
+Description=Enables bluetooth at boot
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c '/usr/bin/bluetoothctl <<< "power on"'
+User=root
+Group=root
+
+[Install]
+WantedBy=bluetooth.service
+EOF
+  systemctl enable bluetooth_power
+  systemctl start bluetooth_power
+}
+
+install_unison() {
+  [ -d "$UNISON" ] || mkdir -p "$UNISON"
+  unison_common_profile > "$UNISON/_common.prf"
+}
+
+upload_ssh_key() {
+require_master
+require_packages openssh-client
+echo "Establishing SSH connection to $MASTER"
+[ -e "$HOME/.ssh/id_rsa" ] || ssh-keygen -C "$(hostname) slave to $MASTER" -f "$HOME/.ssh/id_rsa" -N ''
+echo "Uploading root public key to $MASTER_USER"
+ssh "$MASTER_USER" "grep '$(<"$HOME/.ssh/id_rsa.pub")' \$HOME/.ssh/authorized_keys &>/dev/null || cat >> \$HOME/.ssh/authorized_keys" < "$HOME/.ssh/id_rsa.pub"
+ssh "$MASTER_USER" "echo SSH connection successfully established"
+}
+
+install_synccluster_cron() {
+cat > /etc/cron.d/synccluster <<EOF
+24 4 * * * root /usr/local/bin/synccluster sync
+*/20 * * * * root /usr/local/bin/synccluster quick_sync
+EOF
+}
+
+external_backup() {
+host="${1#*@}"
+host="${host%%:*}"
+path="${1#*:}"
+
+# Setup SSH key
+local oldmaster="$MASTER"
+local oldmaster_user="$MASTER_USER"
+MASTER="$host"
+MASTER_USER="${1%%:*}"
+upload_ssh_key
+
+# Setup synchronization task
+cat > /etc/cron.d/"$host" <<EOF
+05 3 * * * root rsync -a --delete '$1/' '$BACKUPDIR/$host/fs/$path/'
+EOF
+mkdir -p "$BACKUPDIR/$host/fs/$path/"
+
+# Restore MASTER variables
+MASTER="$oldmaster"
+MASTER_USER="$oldmaster_user"
+
+echo "External backup successfully set up"
+}
+
+periodic_backup() {
+host="${1#*@}"
+host="${host%%:*}"
+path="${1#*:}"
+
+# Setup SSH key
+local oldmaster="$MASTER"
+local oldmaster_user="$MASTER_USER"
+MASTER="$host"
+MASTER_USER="${1%%:*}"
+upload_ssh_key
+
+# Setup synchronization task
+cat > /etc/cron.d/"$host" <<EOF
+05 3 * * * root synccluster backup '$1' '$BACKUPDIR/$host'
+EOF
+mkdir -p "$BACKUPDIR/$host/fs/$path/"
+
+# Restore MASTER variables
+MASTER="$oldmaster"
+MASTER_USER="$oldmaster_user"
+
+echo "Periodic backup successfully set up"
+}
+
+
+
+fetch_backup_conf() {
+local oldmaster="$MASTER"
+local oldmaster_user="$MASTER_USER"
+. "$1"
+MASTER="$oldmaster"
+MASTER_USER="$oldmaster_user"
+
+generate_synccluster_conf
+}
+
+fetch_master_conf() {
+local oldmaster="$MASTER"
+local oldmaster_user="$MASTER_USER"
+trap 'rm -f /tmp/synccluster' EXIT
+if rsync "$MASTER_USER":/etc/default/synccluster /tmp/synccluster; then
+  . /tmp/synccluster
+  rm /tmp/synccluster
+fi
+trap EXIT
+MASTER="$oldmaster"
+MASTER_USER="$oldmaster_user"
+
+generate_synccluster_conf
+}
+
+setup_master() {
+if [ "$UID" -ne 0 ]; then
+  echo "This script requires to be root."
+  exit 1
+fi
+
+echo "Set up this host as a master ? (y/n)"
+read answer
+[ "$answer" = "y" ] || exit 0
+
+require_domain
+require_password
+require_mailrelay
+
+generate_synccluster_conf
+
+install_base_packages
+install_postfix
+install_dovecot
+install_unison
+install_roundcube
+install_owncloud
+
+systemctl restart apache2
+systemctl restart postfix
+systemctl restart dovecot
+}
+
+
+unison_common_profile() {
+cat <<'EOF'
+path = Bureau
+path = Documents
+path = Images
+path = Modèles
+path = Musique
+path = Vidéos
+path = Jeux
+path = Logiciels
+path = .config
+path = .mozilla
+
+batch = true
+times = true
+silent = true
+retry = 1
+addversionno = true
+sshargs = -C
+
+owner = true
+times = true
+
+prefer = newer
+
+ignore = Regex .*/\.?[cC]ache/.*
+ignore = Name [lL]ock
+ignore = Name .parentlock
+ignore = Name *.[lL]ock
+ignore = Name *.nps
+ignore = Name *.o
+ignore = Name *~
+ignore = Name .*~
+ignore = Name .[tT]rash*
+ignore = Name .*.swp
+ignore = Name [Tt]humbs.db
+ignore = Name $RECYCLE.BIN
+ignore = Name Crash Reports
+ignore = Path Documents/HTC
+EOF
+}
+
+owncloud_sync_config() {
+  local target="$WWWDIR/owncloud/config/config.php"
+  local src="/tmp/config.php"
+
+  trap "rm -f $src ${src}.tmp" EXIT
+
+  rsync -a "$MASTER_USER:$WWWDIR/owncloud/config/config.php" "/tmp/config.php"
+  grep -v -e "'instanceid'" -e "'passwordsalt'" -e "'secret'" -e ');' "$target" > "${target}.tmp"
+  grep -e "'instanceid'" -e "'passwordsalt'" -e "'secret'" -e ');' "$src" >> "${target}.tmp"
+  mv "${target}.tmp" "$target"
+
+  trap EXIT
+}
+
+require_master() {
+  [ "$MASTER_USER" ] || MASTER_USER="$1"
+  [ "$MASTER_USER" ] || read -p 'Enter master user and host (example: root@master.domain.tld):' MASTER_USER
+  MASTER="${MASTER_USER#*@}"
+}
+
+setup_slave() {
+
+require_master "$1"
+
+if [ "$UID" -ne 0 ]; then
+  echo "This script requires to be root."
+  exit 1
+fi
+
+echo "Set up this host as a slave to $MASTER ? (y/n)"
+read answer
+[ "$answer" = "y" ] || exit 0
+
+require_password
+install_base_packages
+
+{
+set +e
+systemctl stop apache2
+systemctl disable apache2
+
+systemctl stop dovecot
+systemctl disable dovecot
+
+systemctl stop postfix
+systemctl disable postfix
+set -e
+} || true
+
+# Install synccluster on this machine
+install_synccluster
+install_synccluster_cron
+
+upload_ssh_key
+fetch_master_conf
+install_postfix
+install_dovecot
+install_unison
+install_roundcube
+install_owncloud
+
+# Popagate password salt and other secrets
+owncloud_sync_config
+
+echo "Synchronize data with master"
+sync
+}
+
+user_file_sync() {
+
+local passwdfile="$1"; shift || true
+local passwdnewfile="$1"; shift || true
+local shadowfile="$1"; shift || true
+local shadownewfile="$1"; shift || true
+local groupfile="$1"; shift || true
+local groupnewfile="$1"; shift || true
+local gshadowfile="$1"; shift || true
+local gshadownewfile="$1"; shift || true
+
+grep -E ":x:100[0-9][0-9]:" "$groupfile" | while IFS=':' read group pass gid members; do
+  # Add group if missing
+  if ! grep -E "^$group:x:" "$groupnewfile"; then
+    grep -E "^$group:x:" "$groupfile" >> "$groupnewfile"
+  fi
+done
+
+grep -E ":x:100[0-9][0-9]:" "$passwdfile" | while IFS=':' read user pass uid gid name homedir shell; do
+  # Add user if missing
+  if ! grep -E "^$user:" "$passwdnewfile" &>/dev/null; then
+    grep -E "^$user:" "$passwdfile" >> "$passwdnewfile"
+
+    # Add user to the same groups as local user
+    sed -i 's;\(.*:x:[0-9]*.*[:,]local.*\);\1,'"$user"';' "$groupnewfile"
+
+    # Create home directory from skeleton
+    if ! [ -d "$homedir" ]; then
+      cp -a /etc/skel "$homedir"
+      chown -R "$uid:$gid" "$homedir"
+    fi
+  fi
+
+  # Update unison profile
+  if [ "$UNISON" ]; then
+    cat > "$UNISON/$user.prf" << EOF
+include _common
+root = /home/$user
+root = ssh://$MASTER_USER/$homedir
+EOF
+  fi
+
+  # Update password
+  grep -vE "^$user:" "$shadownewfile" > "$shadownewfile."
+  grep -E "^$user:" "$shadowfile" >> "$shadownewfile."
+  mv "$shadownewfile." "$shadownewfile"
+
+  echo "$user"
+done
+
+cp "$gshadowfile" "$gshadownewfile"
+}
+
+install_synccluster() {
+  dir "/usr/local/bin"
+  cp "$0" /usr/local/bin/synccluster &>/dev/null || true
+  chmod 755 /usr/local/bin/synccluster
+}
+
+user_sync() {
+T="$(mktemp -d)"
+trap "rm -rf '$T'" EXIT
+
+rsync "$MASTER_USER:/etc/{passwd,shadow,group,gshadow}" "$T"/
+cp /etc/passwd "$T"/passwd.new
+cp /etc/shadow "$T"/shadow.new
+cp /etc/group "$T"/group.new
+cp /etc/gshadow "$T"/gshadow.new
+
+# Merge user files
+user_file_sync "$T"/passwd "$T"/passwd.new "$T"/shadow "$T"/shadow.new "$T"/group "$T"/group.new "$T"/gshadow "$T"/gshadow.new >/dev/null
+
+# Update system files
+mv "$T/passwd.new" /etc/passwd
+mv "$T/shadow.new" /etc/shadow
+mv "$T/group.new" /etc/group
+chown root:root /etc/passwd /etc/shadow /etc/group
+chmod 644 /etc/passwd /etc/group
+chmod 600 /etc/shadow
+
+# Remove obsolete users
+grep -E ":x:100[0-9][0-9]:" /etc/passwd | while IFS=':' read user pass uid gid name homedir shell; do
+  if ! grep -E "^$user:" "$T"/passwd; then
+    echo "User $user was removed. Home directory left untouched."
+    rm -f "$UNISON/$user.prf"
+    userdel "$user"
+  fi
+done
+
+rm -rf "$T"
+trap EXIT
+}
+
+unison_sync() {
+rsync -a "$MASTER_USER":"$UNISON/_common.prf" "$UNISON"/ || true
+
+# Synchronize content
+for f in "$UNISON"/[a-zA-Z0-9]*.prf; do
+  user="$(basename "$f" .prf)"
+  if grep -E "^$user:" /etc/passwd &>/dev/null; then
+    unison "$user"
+  fi
+done
+}
+
+postgres_sync() {
+pushd / &>/dev/null
+ssh "$MASTER_USER" \
+    "cd /; su -c 'pg_dumpall -c | xz -c -6' postgres" \
+  | su -c 'unxz -c | grep -Pv "^(?:CREATE|DROP|ALTER) ROLE postgres" | psql -q' postgres >/dev/null
+popd &>/dev/null
+}
+
+www_sync() {
+rsync -a --delete "$MASTER_USER":"$WWWDIR"/ "$WWWDIR"/
+rsync -a --delete "$MASTER_USER":"$CLOUDDIR"/ "$CLOUDDIR"/
+}
+
+conf_sync() {
+rsync -a --delete "$MASTER_USER":/etc/apache2/ /etc/apache2/
+rsync -a --delete "$MASTER_USER":/etc/php5/ /etc/php5/
+rsync -a --delete "$MASTER_USER":/etc/postfix/ /etc/postfix/
+rsync -a --delete "$MASTER_USER":/etc/dovecot/ /etc/dovecot/
+rsync -a --delete "$MASTER_USER":"$UNISON"/ "$UNISON"/
+owncloud_sync_config
+}
+
+mail_sync() {
+rsync -a --delete "$MASTER_USER":"$MAILDIR"/ "$MAILDIR"/
+rsync -a "$MASTER_USER":/etc/aliases /etc/aliases
+newaliases
+}
+
+install_drives() {
+require_domain
+require_packages btrfs-tools
+
+local pattern=''
+if [ "$1" = "-a" ]; then
+  pattern="*"
+else
+  pattern="$DOMAIN.*"
+fi
+
+tmpdir="$(mktemp -d)"
+
+pushd /dev/disk/by-label &>/dev/null
+for d in $pattern; do
+  trap "rm -f /tmp/fstab; umount '$tmpdir'; rmdir '$tmpdir'" EXIT
+  mount -r "$d" "$tmpdir"
+  if [ -e "$tmpdir/fstab" ]; then
+    grep -F -f <(cut -d' ' -f1 "$tmpdir/fstab") -v /etc/fstab > /tmp/fstab
+    cat "$tmpdir/fstab" >> /tmp/fstab
+    mv /tmp/fstab /etc/fstab
+    cp "$tmpdir/fstab" "/tmp/fstab"
+    umount "$tmpdir"
+    while read device mountpoint other; do
+      if [ -e "$mountpoint" ]; then
+        if ! [ -d "$mountpoint" ]; then
+          echo "Warning: $mountpoint is not empty"
+          continue
+        fi
+      else
+        mkdir -p "$mountpoint"
+      fi
+      echo "Mounting $mountpoint from device $device"
+      mount "$mountpoint"
+    done < "/tmp/fstab"
+  fi
+  trap EXIT
+done
+popd &>/dev/null
+
+rm -r "$tmpdir"
+}
+
+sync() {
+[ "$MASTER" ] || exit 0
+quick_sync
+postgres_sync
+www_sync
+mail_sync
+}
+
+quick_sync() {
+[ "$MASTER" ] || exit 0
+user_sync
+unison_sync
+}
+
+# Synchronize a local client (NFS-mounted home)
+client_sync() {
+[ "$MASTER" ] || exit 0
+user_sync
+}
+
+install_nfs_server() {
+  require_packages nfs-kernel-server
+  cat > /etc/exports <<EOF
+/home 192.168.0.0/24(rw,sync,no_subtree_check,fsid=0)
+$MASSDIR 192.168.0.0/24(rw,sync,no_subtree_check)
+EOF
+  exportfs -r
+}
+
+install_nfs_client() {
+  require_master "$1"
+  require_packages nfs-common
+  grep -v nfs4 /etc/fstab > /tmp/fstab
+  mkdir -p "$MASSDIR"
+  cat >> /tmp/fstab <<EOF
+$MASTER:/ /home nfs4 rw,rsize=131072,wsize=131072 0 0
+$MASTER:${MASSDIR#/home} $MASSDIR nfs4 rw,rsize=131072,wsize=131072 0 0
+EOF
+}
+
+promote() {
+echo "This host will be promoted to a master server."
+echo "Ensure that the previous master is disabled before proceeding."
+echo "This cannot be undone. Continue ?"
+read answer
+[ "$answer" != "yes" ] && exit 0
+
+if [ -z "$MASTER" ]; then
+  echo "This host is already a master. Cannot continue."
+  exit 1
+fi
+
+ssh "$MASTER_USER" "systemctl disable apache2; systemctl disable dovecot; systemctl disable postfix" || true
+
+unset MASTER
+unset MASTER_USER
+
+read -i "$MAILRELAY" -p 'Mail relay of the new master:' MAILRELAY
+generate_synccluster_conf
+sed -i "s;^relayhost *=.*;relayhost = $MAILRELAY;" /etc/postfix/main.cf
+
+systemctl enable apache2
+systemctl start apache2
+
+systemctl enable dovecot
+systemctl start dovecot
+
+systemctl enable postfix
+systemctl restart postfix
+
+# Disable backup cron tasks
+rm /etc/cron.d/synccluster
+
+# Remove backup profiles for unison
+for f in "$UNISON"/[a-zA-Z0-9]*.prf; do
+  rm "$f"
+done
+}
+
+install_owncloud_client() {
+  echo "deb http://download.opensuse.org/repositories/isv:/ownCloud:/desktop/Debian_$(cut -c1 /etc/debian_version).0/ /" >> /etc/apt/sources.list.d/owncloud-client.list 
+  wget -qO- "http://download.opensuse.org/repositories/isv:ownCloud:desktop/Debian_$(cut -c1 /etc/debian_version).0/Release.key" | apt-key add -
+  apt-get update
+  require_packages owncloud-client
+}
+
+setup_client() {
+  require_master "$1"
+  install_synccluster
+  generate_synccluster_conf
+  upload_ssh_key
+  install_owncloud_client
+  install_nfs_client
+  install_synccluster_client_sync
+  client_sync
+}
+
+setup_roaming() {
+  require_master "$1"
+  install_synccluster
+  generate_synccluster_conf
+  upload_ssh_key
+  install_owncloud_client
+  install_synccluster_client_sync
+  roaming_sync
+}
+
+install_kodi() {
+  require_packages kodi lightdm
+
+  cat > /usr/local/bin/kodi_session <<EOF
+#!/bin/bash
+
+(sleep 15 && /usr/bin/bluetoothctl <<< "power on" ) &
+/usr/bin/setxkbmap fr
+EOF
+  chmod +x /usr/local/bin/kodi_session
+
+  grep 'synccluster configuration' /etc/lightdm/lightdm.conf &>/dev/null || mv /etc/lightdm/lightdm.conf /etc/lightdm/lightdm.conf.old 
+  cat > /etc/lightdm/lightdm.conf <<EOF
+# synccluster configuration
+[LightDM]
+start-default-seat=true
+seats=Seat:0
+
+[SearDefaults]
+
+[Seat:0]
+xdg-seat=seat0
+allow-user-switching=false
+autologin-user=local
+autologin-user-timeout=0
+enabled=true
+display-setup-script=/usr/local/bin/kodi_session
+EOF
+}
+
+# Show info about the host
+info() {
+if ! [ -e /etc/default/synccluster ]; then
+  echo "synccluster is not installed on this machine"
+  exit 1
+fi
+. /etc/default/synccluster
+if [ -z "$MASTER" ]; then
+  echo "Master server"
+else
+  [ -z "$CLIENT" ] && echo "This is a slave server" || echo "This is a client"
+  echo "Linked to master server $MASTER"
+fi
+echo "UNISON=$UNISON"
+echo "MAILDIR=$MAILDIR"
+}
+
+help() {
+  cat <<EOF
+$0: Setup and manage synchronization between different hosts.
+The following commands are available:
+
+$0 setup_master
+    Setup this machine as a new master.
+
+$0 setup_slave root@host.domain.tld
+    Setup this machine as a slave to another machine.
+
+$0 setup_client root@host.domain.tld
+    Setup this machine as a client of another machine (either a master or a slave).
+
+$0 setup_roaming root@host.domain.tld
+    Setup this machine as a roaming client.
+
+$0 promote
+    Promote the current slave as a master.
+    This cannot be undone.
+
+$0 setup_sudo
+    Setup the sudo utility to allow normal users to gain superuser privileges.
+
+$0 install_bluetooth
+    Setup bluetooth power on boot
+
+$0 install_upnpc
+    Setup UPNP broadcaster to open external ports on this machine
+
+$0 install_modem
+    Install LaBox MODEM autoconfiguration. Warning: opens passwordless WiFi.
+
+$0 install_drives
+    Autodetect and install all drives following the convention:
+     Partition label = domain.example.tld.partlabel
+     Contains a /fstab file that is appened to /etc/fstab
+
+$0 install_kodi
+    Install the kodi media center as autoboot.
+    Once installed, the PC will autologin to the kodi media center.
+
+$0 backup [source] [target]
+    Backup a whole machine from source to target. source or target may be a remote path (root@host:/) but not both.
+    By default, backup the local machine to the local backup directory.
+
+$0 restore_master <source>
+    Create a new master on this host and restore data from a backup. <source> must point at a directory created with the backup command.
+    <source> may be a local or a remote path.
+
+$0 periodic_backup <source>
+    Setup a periodic backup of the remote server.
+    Example: periodic_backup remote.host.example.tld:/
+
+$0 external_backup <source>
+    Setup a periodic backup of a raw rsync path.
+
+$0 user_sync
+    Synchronize users.
+
+$0 sync
+    Synchronize data.
+
+$0 quick_sync
+    Differential update to data sync.
+
+$0 info
+    Show information about the current machine.
+EOF
+  exit 0
+}
+
+if [ -z "$1" -o "$1" = "-h" -o "$1" = "--help" ]; then
+  help
+fi
+
+
+function="$1"; shift || true
+"$function" "$@"
