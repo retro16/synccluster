@@ -42,6 +42,7 @@ unset MASTER
 unset MASTER_USER
 unset LOCALDIR
 unset MASSDIR
+unset KODIDIR
 unset CLOUDDIR
 unset WWWDIR
 unset BACKUPDIR
@@ -59,6 +60,7 @@ MASTER='$MASTER'
 MASTER_USER='$MASTER_USER'
 LOCALDIR='/home/.local'
 MASSDIR='/home/.local/mass'
+KODIDIR='/home/.local/kodi'
 CLOUDDIR='/home/.local/mass/owncloud/data'
 WWWDIR='/var/www'
 BACKUPDIR='/home/.local/backup'
@@ -81,6 +83,7 @@ export MASTER
 export MASTER_USER
 export LOCALDIR
 export MASSDIR
+export KODIDIR
 export CLOUDDIR
 export WWWDIR
 export BACKUPDIR
@@ -96,7 +99,13 @@ roundcube_version="1.1.4"
 owncloud_version="9.0.0"
 roundcube_url="http://downloads.sourceforge.net/project/roundcubemail/roundcubemail/$roundcube_version/roundcubemail-$roundcube_version-complete.tar.gz"
 owncloud_url="https://download.owncloud.org/community/owncloud-${owncloud_version}.tar.bz2"
+cygwin_url="https://cygwin.com/setup-x86_64.exe"
+cygwin_mirror="http://mirror.switch.ch/ftp/mirror/cygwin"
+cygwin_install_dir="C:\\cygwin_synccluster"
+cygwin_packages="bash,wget,rsync,unison"
+cygwin_install_command="setup-x86_64.exe -D -R $cygwin_install_dir -s $cygwin_mirror -P $cygwin_packages -a x86_64 -q -B -l $cygwin_install_dir\\install -N -d"
 
+[ "$(uname -o)" = "Cygwin" ] && cygwin=1 || cygwin=""
 
 require_domain() {
   [ "$DOMAIN" ] || DOMAIN="$1"
@@ -419,8 +428,8 @@ generate_backup_rsync_list() {
   cat <<EOF
 - *.o
 - .*.swp
-- [cC]ache
-- .[cC]ache
+- [cC]ache/
+- .[cC]ache/
 - [lL]ock
 - .parentlock
 - *.nps
@@ -436,6 +445,8 @@ generate_backup_rsync_list() {
 + /etc/mailname
 + $CLOUDDIR
 + $CLOUDDIR/**
++ $KODIDIR
++ $KODIDIR/**
 + $WWWDIR
 + $WWWDIR/**
 + $MAILDIR
@@ -991,8 +1002,12 @@ setup_slave() {
 require_master "$1"
 
 if [ "$UID" -ne 0 ]; then
-  echo "This script requires to be root."
-  exit 1
+  if which sudo &>/dev/null; then
+    sudo "$@"
+  else
+    echo "This script requires to be root."
+    exit 1
+  fi
 fi
 
 echo "Set up this host as a slave to $MASTER ? (y/n)"
@@ -1094,6 +1109,7 @@ install_synccluster() {
 }
 
 user_sync() {
+[ "$MASTER" ] || return
 T="$(mktemp -d)"
 trap "rm -rf '$T'" EXIT
 
@@ -1128,6 +1144,7 @@ trap EXIT
 }
 
 unison_sync() {
+[ "$MASTER" ] || return
 rsync -a "$MASTER_USER":"$UNISON/_common.prf" "$UNISON"/ || true
 
 # Synchronize content
@@ -1140,6 +1157,7 @@ done
 }
 
 postgres_sync() {
+[ "$MASTER" ] || return
 pushd / &>/dev/null
 ssh "$MASTER_USER" \
     "cd /; su -c 'pg_dumpall -c | xz -c -6' postgres" \
@@ -1148,11 +1166,13 @@ popd &>/dev/null
 }
 
 www_sync() {
+[ "$MASTER" ] || return
 rsync -a --delete "$MASTER_USER":"$WWWDIR"/ "$WWWDIR"/
 rsync -a --delete "$MASTER_USER":"$CLOUDDIR"/ "$CLOUDDIR"/
 }
 
 conf_sync() {
+[ "$MASTER" ] || return
 rsync -a --delete "$MASTER_USER":/etc/apache2/ /etc/apache2/
 rsync -a --delete "$MASTER_USER":/etc/php5/ /etc/php5/
 rsync -a --delete "$MASTER_USER":/etc/postfix/ /etc/postfix/
@@ -1162,6 +1182,7 @@ owncloud_sync_config
 }
 
 mail_sync() {
+[ "$MASTER" ] || return
 rsync -a --delete "$MASTER_USER":"$MAILDIR"/ "$MAILDIR"/
 rsync -a "$MASTER_USER":/etc/aliases /etc/aliases
 newaliases
@@ -1211,7 +1232,7 @@ rm -r "$tmpdir"
 }
 
 sync() {
-[ "$MASTER" ] || exit 0
+[ "$MASTER" ] || return
 quick_sync
 postgres_sync
 www_sync
@@ -1219,14 +1240,14 @@ mail_sync
 }
 
 quick_sync() {
-[ "$MASTER" ] || exit 0
+[ "$MASTER" ] || return
 user_sync
 unison_sync
 }
 
-# Synchronize a local client (NFS-mounted home)
+# Synchronize a client
 client_sync() {
-[ "$MASTER" ] || exit 0
+[ "$MASTER" ] || return
 user_sync
 }
 
@@ -1318,6 +1339,7 @@ setup_roaming() {
 }
 
 install_kodi() {
+  require_password
   require_packages kodi lightdm
 
   cat > /usr/local/bin/kodi_session <<EOF
@@ -1327,6 +1349,8 @@ install_kodi() {
 /usr/bin/setxkbmap fr
 EOF
   chmod +x /usr/local/bin/kodi_session
+
+  useradd -c "" -d "$KODIDIR" -p"${PASSWORD}kodi" -U kodi
 
   grep 'synccluster configuration' /etc/lightdm/lightdm.conf &>/dev/null || mv /etc/lightdm/lightdm.conf /etc/lightdm/lightdm.conf.old 
   cat > /etc/lightdm/lightdm.conf <<EOF
@@ -1340,11 +1364,56 @@ seats=Seat:0
 [Seat:0]
 xdg-seat=seat0
 allow-user-switching=false
-autologin-user=local
+autologin-user=kodi
 autologin-user-timeout=0
 enabled=true
 display-setup-script=/usr/local/bin/kodi_session
 EOF
+}
+
+# Run a command on the master
+master_exec() {
+  if [ "$MASTER" ]; then
+    ssh "$MASTER_USER" "synccluster master_exec" "$@"
+  else
+    "$@"
+  fi
+}
+
+user_add() {
+  login="$1"
+  name="$2"
+  group="$3"
+  [ "$login" ] && [ "$name" ] && [ "$group" ] || help
+
+  newuid="$(cut -d: -f3 /etc/passwd | grep -E '100[0-9][0-9]'|sort -nr)"
+  [ "$newuid" ] && newuid="$((newuid + 1))" || newuid=10000
+
+  master_exec useradd -c '' -d /home/$login -m -N -u $newuid
+  user_sync
+}
+
+user_del() {
+  login="$1"
+  master_exec userdel -r $login
+  # TODO remove cloud and roundcube data
+  user_sync
+}
+
+group_add() {
+  group="$1"
+  [ "$group" ] || help
+
+  newgid="$(cut -d: -f3 /etc/group | grep -E '100[0-9][0-9]'|sort -nr)"
+  [ "$newgid" ] && newgid="$((newgid + 1))" || newgid=10000
+
+  master_exec groupadd -g $newgid
+}
+
+group_del() {
+  group="$1"
+  master_exec groupdel -r $group
+  user_sync
 }
 
 # Show info about the host
@@ -1421,6 +1490,18 @@ $0 periodic_backup <source>
 $0 external_backup <source>
     Setup a periodic backup of a raw rsync path.
 
+$0 user_add <username> <realname> <group>
+    Add a new user. If executed from a slave or a client, creates the user on the master.
+
+$0 group_add <groupname>
+    Add a new group. If executed from a slave or a client, creates the group on the master.
+
+$0 user_del <username>
+    Removes a user and ALL ITS DATA. If executed from a slave or a client, deletes the user and its data on the master.
+
+$0 group_del <groupname>
+    Remove a group. If executed from a slave or a client, removes the group on the master.
+
 $0 user_sync
     Synchronize users.
 
@@ -1429,6 +1510,10 @@ $0 sync
 
 $0 quick_sync
     Differential update to data sync.
+
+$0 master_exec <command...>
+    Executes a command on the master. Finds recursively the real master (a machine with no master) before running the command.
+    This allows to run commands on the real top master, going through clients connected to slaves connected to a master.
 
 $0 info
     Show information about the current machine.
