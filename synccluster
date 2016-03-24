@@ -198,9 +198,6 @@ setup_sudo() {
 root   ALL=NOPASSWD: ALL
 %sudo   ALL=NOPASSWD: ALL
 EOF
-
-  sed -i "s;^sudo:x:\\([0-9]*\\):\\([a-zA-Z0-9].*\\);sudo:x:\\1:\\2,$(grep -E ':x:100[0-9][0-9]:' /etc/passwd | cut -d: -f1 | tr '\n' ',' | sed 's/,$//');" /etc/group
-  sed -i "s;^sudo:x:\\([0-9]*\\):$;sudo:x:\\1:\\2,$(grep -E ':x:100[0-9][0-9]:' /etc/passwd | cut -d: -f1 | tr '\n' ',' | sed 's/,$//');" /etc/group
 }
 
 install_roundcube() {
@@ -907,6 +904,16 @@ MASTER_USER="$oldmaster_user"
 generate_synccluster_conf
 }
 
+snapshot() {
+  name="$1-$(date +%Y-%m-%d_%H-%M-%S)"
+  mount | grep -E -e '^[^ ]* on / type btrfs ' -e '^[^ ]* on /home type btrfs ' | while read device on target type fs options; do
+    while [ -e "$target/$name" ]; do
+      name="$name.new"
+    done
+    btrfs su cr "$target" "$target/$name"
+  done
+}
+
 setup_master() {
 if [ "$UID" -ne 0 ]; then
   echo "This script requires to be root."
@@ -916,6 +923,8 @@ fi
 echo "Set up this host as a master ? (y/n)"
 read answer
 [ "$answer" = "y" ] || exit 0
+
+snapshot synccluster-before-setup-master
 
 require_domain
 require_password
@@ -999,6 +1008,8 @@ require_master() {
 }
 
 setup_slave() {
+
+snapshot synccluster-before-setup-slave
 
 require_master "$1"
 
@@ -1100,6 +1111,19 @@ EOF
   echo "$user"
 done
 
+# Update sudoers
+if grep -E "^sudo:x:" &>/dev/null "$groupnewfile"; then
+  grep -vE "^sudo:x:" "$groupnewfile" > "$groupnewfile."
+  sudoers="$(grep -E "^sudo:x:" "$groupnewfile" | cut -d: -f1-3)"
+  cut -d: -f4 | tr ',' '\n' | while read user; do
+    if grep -E "^$user:x:100[0-9][0-9]:" "$passwdnewfile"; then
+      sudoers="$sudoers$user,"
+    fi
+  done
+  echo "${sudoers:0: -1}" >> "$groupnewfile."
+  mv "$groupnewfile." "$groupnewfile"
+fi
+
 cp "$gshadowfile" "$gshadownewfile"
 }
 
@@ -1111,6 +1135,11 @@ install_synccluster() {
 
 user_sync() {
 [ "$MASTER" ] || return
+
+# Synchronize users on master if it is a slave of another master.
+# Can be done for users since it is a cheap operation.
+ssh "$MASTER_USER" synccluster user_sync
+
 T="$(mktemp -d)"
 trap "rm -rf '$T'" EXIT
 
@@ -1137,6 +1166,9 @@ grep -E ":x:100[0-9][0-9]:" /etc/passwd | while IFS=':' read user pass uid gid n
     echo "User $user was removed. Home directory left untouched."
     rm -f "$UNISON/$user.prf"
     userdel "$user"
+  else
+    dir /var/spool/cron/crontabs.master
+    rsync -a "$MASTER_USER":/var/spool/cron/crontabs/"$user" /var/spool/cron/crontabs.master/
   fi
 done
 
@@ -1174,6 +1206,8 @@ rsync -a --delete "$MASTER_USER":"$CLOUDDIR"/ "$CLOUDDIR"/
 
 conf_sync() {
 [ "$MASTER" ] || return
+# Synchronize the master to its masters before doing this operation
+ssh "$MASTER_USER" synccluster conf_sync
 rsync -a --delete "$MASTER_USER":/etc/apache2/ /etc/apache2/
 rsync -a --delete "$MASTER_USER":/etc/php5/ /etc/php5/
 rsync -a --delete "$MASTER_USER":/etc/postfix/ /etc/postfix/
@@ -1204,7 +1238,7 @@ local pattern=''
 if [ "$1" = "-a" ]; then
   pattern="*"
 else
-  pattern="$DOMAIN.*"
+  pattern="$DOMAIN_*"
 fi
 
 tmpdir="$(mktemp -d)"
@@ -1291,6 +1325,8 @@ if [ -z "$MASTER" ]; then
   exit 1
 fi
 
+snapshot synccluster-before-promote
+
 ssh "$MASTER_USER" "systemctl disable apache2; systemctl disable dovecot; systemctl disable postfix" || true
 
 unset MASTER
@@ -1316,6 +1352,9 @@ rm /etc/cron.d/synccluster
 for f in "$UNISON"/[a-zA-Z0-9]*.prf; do
   rm "$f"
 done
+
+# Enable user contabs
+mv /var/spool/cron/crontabs.master/* /var/spool/cron/crontabs
 }
 
 install_owncloud_client() {
@@ -1401,6 +1440,15 @@ user_add() {
   user_sync
 }
 
+user_add_to() {
+  login="$1"
+  group="$2"
+  [ "$login" ] && [ "$group" ] || help
+
+  master_exec usermod -a -G $group $login
+  user_sync
+}
+
 user_del() {
   login="$1"
   master_exec userdel -r $login
@@ -1416,6 +1464,7 @@ group_add() {
   [ "$newgid" ] && newgid="$((newgid + 1))" || newgid=10000
 
   master_exec groupadd -g $newgid
+  user_sync
 }
 
 group_del() {
@@ -1500,6 +1549,9 @@ $0 external_backup <source>
 
 $0 user_add <username> <realname> <group>
     Add a new user. If executed from a slave or a client, creates the user on the master.
+
+$0 user_add_to <username> <group>
+    Add a user to a group. Propagates to the master.
 
 $0 group_add <groupname>
     Add a new group. If executed from a slave or a client, creates the group on the master.
