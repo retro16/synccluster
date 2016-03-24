@@ -61,7 +61,7 @@ MASTER_USER='$MASTER_USER'
 LOCALDIR='/home/.local'
 MASSDIR='/home/.local/mass'
 KODIDIR='/home/.local/kodi'
-CLOUDDIR='/home/.local/mass/owncloud/data'
+CLOUDDIR='/home/.local/cloud'
 WWWDIR='/var/www'
 BACKUPDIR='/home/.local/backup'
 MAILDIR='/home/.local/mail'
@@ -308,6 +308,7 @@ ssl_key = </etc/ssl/private/ssl-cert-snakeoil.key
 ssl_cipher_list = ALL:!LOW:!SSLv2:ALL:!aNULL:!ADH:!eNULL:!EXP:RC4+RSA:+HIGH:+MEDIUM
 EOF
 }
+
 install_dovecot() {
   require_packages dovecot-imapd
   local target="$1"; [ "$target" ] || target="/etc/dovecot"; shift || true
@@ -557,7 +558,7 @@ Redirect 301 /owncloud /cloud
     SetEnv HTTP_HOME $WWWDIR/owncloud
 </Directory>
 
-<Directory "$WWWDIR/owncloud/data/">
+<Directory "$CLOUDDIR/">
   # just in case if .htaccess gets disabled
   Require all denied
 </Directory>
@@ -977,7 +978,7 @@ ignore = Path Documents/HTC
 EOF
 }
 
-owncloud_sync_config() {
+owncloud_sync() {
   local target="$WWWDIR/owncloud/config/config.php"
   local src="/tmp/config.php"
 
@@ -1042,8 +1043,8 @@ install_unison
 install_roundcube
 install_owncloud
 
-# Popagate password salt and other secrets
-owncloud_sync_config
+owncloud_sync
+cert_sync
 
 echo "Synchronize data with master"
 sync
@@ -1178,7 +1179,14 @@ rsync -a --delete "$MASTER_USER":/etc/php5/ /etc/php5/
 rsync -a --delete "$MASTER_USER":/etc/postfix/ /etc/postfix/
 rsync -a --delete "$MASTER_USER":/etc/dovecot/ /etc/dovecot/
 rsync -a --delete "$MASTER_USER":"$UNISON"/ "$UNISON"/
-owncloud_sync_config
+owncloud_sync
+cert_sync
+}
+
+cert_sync() {
+rsync -a "$MASTER_USER":/etc/ssl/certs/ssl-cert-snakeoil.pem /etc/ssl/certs/ssl-cert-snakeoil.pem
+rsync -a "$MASTER_USER":/etc/ssl/private/ssl-cert-snakeoil.key /etc/ssl/private/ssl-cert-snakeoil.key
+rsync -a "$MASTER_USER":/etc/ssh/ssh_host_* /etc/ssh/
 }
 
 mail_sync() {
@@ -1510,6 +1518,12 @@ $0 sync
 
 $0 quick_sync
     Differential update to data sync.
+
+$0 owncloud_sync
+    Synchronize owncloud configuration.
+
+$0 cert_sync
+    Synchronize SSL certificate and SSH host key.
 
 $0 master_exec <command...>
     Executes a command on the master. Finds recursively the real master (a machine with no master) before running the command.
