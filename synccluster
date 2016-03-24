@@ -439,8 +439,13 @@ generate_backup_rsync_list() {
 - Crash Reports
 - /**/Documents/HTC/**
 + /etc
++ /etc/apt
++ /etc/apt/sources.list.d
++ /etc/apt/sources.list.d/**
 + /etc/aliases
 + /etc/mailname
++ /etc/cron.d
++ /etc/cron.d/**
 + $CLOUDDIR
 + $CLOUDDIR/**
 + $KODIDIR
@@ -473,9 +478,25 @@ generate_backup_rsync_list() {
 + /home/[a-zA-Z0-9]*/.config/**
 + /home/[a-zA-Z0-9]*/.mozilla
 + /home/[a-zA-Z0-9]*/.mozilla/**
++ /home/[a-zA-Z0-9]*/.vimrc
++ /home/[a-zA-Z0-9]*/.vim
++ /home/[a-zA-Z0-9]*/.vim/**
++ /home/[a-zA-Z0-9]*/.ssh
++ /home/[a-zA-Z0-9]*/.ssh/**
++ /home/[a-zA-Z0-9]*/.unison
++ /home/[a-zA-Z0-9]*/.unison/*.prf
 + /usr
 + /usr/local
 + /usr/local/**
++ /var
++ /var/spool
++ /var/spool/cron
++ /var/spool/cron/crontabs*
++ /var/spool/cron/crontabs*/*
++ /var/www
++ /var/www/*
++ /var/www/*/config
++ /var/www/*/config/**
 + /opt
 + /opt/**
 - $MASSDIR
@@ -957,6 +978,8 @@ path = Jeux
 path = Logiciels
 path = .config
 path = .mozilla
+path = .vim
+path = .ssh
 
 batch = true
 times = true
@@ -1366,6 +1389,7 @@ install_owncloud_client() {
 
 setup_client() {
   require_master "$1"
+  snapshot synccluster-before-setup-client
   install_synccluster
   generate_synccluster_conf
   upload_ssh_key
@@ -1377,6 +1401,7 @@ setup_client() {
 
 setup_roaming() {
   require_master "$1"
+  snapshot synccluster-before-setup-roaming
   install_synccluster
   generate_synccluster_conf
   upload_ssh_key
@@ -1386,6 +1411,7 @@ setup_roaming() {
 }
 
 install_kodi() {
+  snapshot synccluster-before-install-kodi
   require_password
   require_packages kodi lightdm
 
