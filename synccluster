@@ -960,7 +960,7 @@ move_data() {
   require_root
   require_domain
 
-  local label="${DOMAIN},$mass"
+  local label="${DOMAIN}=$mass"
 
   local tmpdir="$(mktemp -d)"
   trap "umount -l '$tmpdir'; rmdir '$tmpdir'" EXIT
@@ -1001,7 +1001,7 @@ create_data_drive() {
     exit 1
   fi
 
-  local label="${DOMAIN},$name"
+  local label="${DOMAIN}=$name"
 
   mkfs.btrfs -f -L "$label" "$device"
 }
@@ -1340,7 +1340,7 @@ local pattern=''
 if [ "$1" = "-a" ]; then
   pattern="*"
 else
-  pattern="$DOMAIN,*"
+  pattern="$DOMAIN=*"
 fi
 
 tmpdir="$(mktemp -d)"
@@ -1615,7 +1615,7 @@ echo "Mass storage:"
 pushd /dev/disk/by-label &>/dev/null
 local tmpdir="$(mktemp -d)"
 trap "umount -l '$tmpdir'; rmdir '$tmpdir'" EXIT
-for d in "${DOMAIN}",*; do
+for d in "${DOMAIN}"=*; do
 
   name="${d#*_}"
   mount "$d" "$tmpdir"
