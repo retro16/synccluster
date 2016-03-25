@@ -62,7 +62,6 @@ default_synccluster() {
 MASTER='$MASTER'
 MASTER_USER='$MASTER_USER'
 LOCALDIR='/home/.local'
-MASSDIR='/home/.local/mass'
 KODIDIR='/home/.local/kodi'
 CLOUDDIR='/home/.local/cloud'
 WWWDIR='/var/www'
@@ -529,8 +528,6 @@ generate_backup_rsync_list() {
 + /var/www/*/config/**
 + /opt
 + /opt/**
-- $MASSDIR*
-- $BACKUPDIR
 - *
 EOF
 }
@@ -891,7 +888,7 @@ MASTER_USER="${1%%:*}"
 upload_ssh_key
 
 # Setup synchronization task
-cat > /etc/cron.d/"$host" <<EOF
+cat >> /etc/cron.d/"$host" <<EOF
 05 3 * * * root rsync -a --delete '$1/' '$BACKUPDIR/$host/fs/$path/'
 EOF
 mkdir -p "$BACKUPDIR/$host/fs/$path/"
@@ -916,7 +913,7 @@ MASTER_USER="${1%%:*}"
 upload_ssh_key
 
 # Setup synchronization task
-cat > /etc/cron.d/"$host" <<EOF
+cat >> /etc/cron.d/"$host" <<EOF
 05 3 * * * root synccluster backup '$1' '$BACKUPDIR/$host'
 EOF
 mkdir -p "$BACKUPDIR/$host/fs/$path/"
@@ -1288,7 +1285,10 @@ trap EXIT
 
 unison_sync() {
 [ "$MASTER" ] || return
+[ "$UNISON" ] || return
 require_master_conf
+[ "$M_UNISON" ] || return
+
 rsync -a "$MASTER_USER":"$M_UNISON/_common.prf" "$UNISON"/ || true
 
 # Synchronize content
@@ -1481,6 +1481,7 @@ setup_client() {
   require_master "$1"
   snapshot before-setup-client
   install_synccluster
+  UNISON=
   generate_synccluster_conf
   upload_ssh_key
   install_owncloud_client
