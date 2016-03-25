@@ -1,6 +1,7 @@
 #!/bin/bash
 
-<<-DOC
+<<LICENSE
+
 The MIT License (MIT)
 
 Copyright (c) 2016 Jean-Matthieu COULON
@@ -23,28 +24,14 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+LICENSE
 
-Sync cluster tool: synchronizes multiple debian distributions together.
-
-Configuration is in /etc/default/synccluster. Keep values the same between master and
-slave because most parts of the script suppose they are the same for all hosts.
-
-Backup directory has the following structure:
-
-BACKUPDIR/hostname/fs => Filesystem as-is
-BACKUPDIR/hostname/postgres.xz => compressed pg_dumpall of the pg database
-
-
-MASSDIR is only a prefix.
-
-DOC
 
 set -e
 
 unset MASTER
 unset MASTER_USER
-unset LOCALDIR
-unset MASSDIR
+unset DATADIR
 unset KODIDIR
 unset CLOUDDIR
 unset WWWDIR
@@ -61,7 +48,7 @@ default_synccluster() {
   cat <<EOF
 MASTER='$MASTER'
 MASTER_USER='$MASTER_USER'
-LOCALDIR='/home/.local'
+DATADIR='/home/.local'
 KODIDIR='/home/.local/kodi'
 CLOUDDIR='/home/.local/cloud'
 WWWDIR='/var/www'
@@ -79,8 +66,7 @@ current_synccluster() {
   cat <<EOF
 MASTER='$MASTER'
 MASTER_USER='$MASTER_USER'
-LOCALDIR='$LOCALDIR'
-MASSDIR='$MASSDIR'
+DATADIR='$DATADIR'
 KODIDIR='$KODIDIR'
 CLOUDDIR='$CLOUDDIR'
 WWWDIR='$WWWDIR'
@@ -102,8 +88,7 @@ eval "$(default_synccluster)"
 export PASSWORD=''
 export MASTER
 export MASTER_USER
-export LOCALDIR
-export MASSDIR
+export DATADIR
 export KODIDIR
 export CLOUDDIR
 export WWWDIR
@@ -965,13 +950,17 @@ snapshot() {
 move_data() {
   local mass="$1"
   local name="$2"
-  local path="$3"
-  local mountpoint="$LOCALDIR/$name"
+  local path="$(readlink -fs "$3")"
+  local mountpoint="$DATADIR/$name"
+
+  if [ -e "$mountpoint" ]; then
+    mountpoint="$(readlink -fs "$mountpoint")"
+  fi
 
   require_root
   require_domain
 
-  local label="${DOMAIN}_$mass"
+  local label="${DOMAIN},$mass"
 
   local tmpdir="$(mktemp -d)"
   trap "umount -l '$tmpdir'; rmdir '$tmpdir'" EXIT
@@ -984,7 +973,7 @@ move_data() {
 
   rsync -aP "$path/" "$tmpdir/$name/"
   rm -r "$path"
-  ln -s "$mountpoint" "$path"
+  [ "${mountpoint%/}" = "${path%/}" ] || ln -s "$mountpoint" "$path"
   mkdir -p "$mountpoint"
   mount "$mountpoint"
 
@@ -1012,7 +1001,7 @@ create_data_device() {
     exit 1
   fi
 
-  local label="${DOMAIN}_$name"
+  local label="${DOMAIN},$name"
 
   mkfs.btrfs -f -L "$label" "$device"
 }
@@ -1350,7 +1339,7 @@ local pattern=''
 if [ "$1" = "-a" ]; then
   pattern="*"
 else
-  pattern="$DOMAIN_*"
+  pattern="$DOMAIN,*"
 fi
 
 tmpdir="$(mktemp -d)"
@@ -1408,8 +1397,7 @@ user_sync
 install_nfs_server() {
   require_packages nfs-kernel-server
   cat > /etc/exports <<EOF
-/home 192.168.0.0/24(rw,sync,no_subtree_check,fsid=0)
-$MASSDIR 192.168.0.0/24(rw,sync,no_subtree_check)
+/home 192.168.0.0/24(rw,sync,no_subtree_check,crossmnt,fsid=0)
 EOF
   exportfs -r
 }
@@ -1419,10 +1407,8 @@ install_nfs_client() {
   require_packages nfs-common
   require_master_conf
   grep -v nfs4 /etc/fstab > /tmp/fstab
-  mkdir -p "$MASSDIR"
   cat >> /tmp/fstab <<EOF
 $MASTER:/ /home nfs4 rw,rsize=131072,wsize=131072 0 0
-$MASTER:${M_MASSDIR#/home} $MASSDIR nfs4 rw,rsize=131072,wsize=131072 0 0
 EOF
 }
 
@@ -1628,7 +1614,7 @@ echo "Mass storage:"
 pushd /dev/disk/by-label &>/dev/null
 local tmpdir="$(mktemp -d)"
 trap "umount -l '$tmpdir'; rmdir '$tmpdir'" EXIT
-for d in "${DOMAIN}"_*; do
+for d in "${DOMAIN}",*; do
 
   name="${d#*_}"
   mount "$d" "$tmpdir"
