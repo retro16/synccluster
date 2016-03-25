@@ -965,21 +965,23 @@ snapshot() {
   done
 }
 
-move_to_mass() {
-  local name="$1"
-  local path="$2"
-  local mass="$3"
-  local mountpoint="$MASSDIR/$name"
+move_data() {
+  local mass="$1"
+  local name="$2"
+  local path="$3"
+  local mountpoint="$LOCALDIR/$name"
 
   require_root
   require_domain
 
+  local label="${DOMAIN}_$mass"
+
   local tmpdir="$(mktemp -d)"
   trap "umount -l '$tmpdir'; rmdir '$tmpdir'" EXIT
   
-  mount -o subvol=/ "/dev/disk/by-label/${DOMAIN}_$mass" "$tmpdir"
+  mount -o subvol=/ "/dev/disk/by-label/$label" "$tmpdir"
   btrfs subvolume create "$tmpdir/$name"
-  local fstab="LABEL=$(btrfs filesystem label "$tmpdir") $mountpoint btrfs subvol=$name 0 0"
+  local fstab="LABEL=$label $mountpoint btrfs subvol=$name 0 0"
   echo "$fstab" >> "$tmpdir/fstab"
   echo "$fstab" >> /etc/fstab
 
@@ -995,7 +997,7 @@ move_to_mass() {
   trap EXIT
 }
 
-create_mass() {
+create_data_device() {
   local name="$1"
   local device="$2"
 
@@ -1013,23 +1015,9 @@ create_mass() {
     exit 1
   fi
 
-  dd if=/dev/zero of="$device" bs=16M count=4
-  dd if=/dev/zero of="$device" bs=1M seek="$(fdisk -l /dev/sda|grep 'Disk /' | cut -d' ' -f5)"
+  local label="${DOMAIN}_$name"
 
-  fdisk "$device" <<EOF
-o
-n
-p
-1
-
-
-w
-q
-EOF
-
-  mkfs.btrfs -f -L "${DOMAIN}_$name" "${device}1"
-
-  trap EXIT
+  mkfs.btrfs -f -L "$label" "$device"
 }
 
 require_root() {
@@ -1635,6 +1623,38 @@ grep -E ':x:100[0-9][0-9]:' /etc/group | while IFS=: read group other; do
 done
 echo ""
 echo "Mass storage:"
+
+pushd /dev/disk/by-label &>/dev/null
+local tmpdir="$(mktemp -d)"
+trap "umount -l '$tmpdir'; rmdir '$tmpdir'" EXIT
+for d in "${DOMAIN}"_*; do
+
+  name="${d#*_}"
+  mount "$d" "$tmpdir"
+  read device total used available percent mp <<< "$(df -h "$tmpdir" | tail -1)"
+
+  echo "Device $name:"
+  echo " Used: $used ($percent)   Free: $available"
+
+  if ! [ -e "$tmpdir/fstab" ]; then
+    echo " Not installed"
+    umount "$tmpdir"
+    continue
+  fi
+
+  while read device mountpoint filetype options dump pass; do
+    subvol="$(sed 's;.*subvol=\([^ ,]*\);\1;')"
+    mount | grep -F " $mountpoint " &>/dev/null && mounted=mounted || mounted='not mounted'
+    if grep -E "$device.*$mountpoint.*$filetype" /etc/fstab; then
+      echo " Subvolume $subvol on $mountpoint ($mounted)"
+    fi
+  done < "$tmpdir/fstab"
+
+  umount "$tmpdir"
+done
+rmdir "$tmpdir"
+trap EXIT
+popd &>/dev/null
 
 current_synccluster
 }
