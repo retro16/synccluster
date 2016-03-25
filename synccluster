@@ -34,6 +34,9 @@ Backup directory has the following structure:
 BACKUPDIR/hostname/fs => Filesystem as-is
 BACKUPDIR/hostname/postgres.xz => compressed pg_dumpall of the pg database
 
+
+MASSDIR is only a prefix.
+
 DOC
 
 set -e
@@ -66,6 +69,25 @@ WWWDIR='/var/www'
 BACKUPDIR='/home/.local/backup'
 MAILDIR='/home/.local/mail'
 UNISON='/home/.local/unison'
+MIRROR='$MIRROR'
+DISTNAME='$DISTNAME'
+DOMAIN='$DOMAIN'
+MAILRELAY='$MAILRELAY'
+EOF
+}
+
+current_synccluster() {
+  cat <<EOF
+MASTER='$MASTER'
+MASTER_USER='$MASTER_USER'
+LOCALDIR='$LOCALDIR'
+MASSDIR='$MASSDIR'
+KODIDIR='$KODIDIR'
+CLOUDDIR='$CLOUDDIR'
+WWWDIR='$WWWDIR'
+BACKUPDIR='$BACKUPDIR'
+MAILDIR='$MAILDIR'
+UNISON='$UNISONDIR'
 MIRROR='$MIRROR'
 DISTNAME='$DISTNAME'
 DOMAIN='$DOMAIN'
@@ -122,8 +144,16 @@ generate_synccluster_conf() {
   local synccluster="$1"; [ "$synccluster" ] || synccluster="/etc/default/synccluster"; shift || true
   require_domain
   require_mailrelay
-  default_synccluster > "$synccluster"
+  current_synccluster > "$synccluster"
   . "$synccluster"
+}
+
+require_master_conf() {
+  if [ "$MASTER" ]; then
+    eval "$(ssh "$MASTER_USER" "cat /etc/default/synccluster" | sed 's;^;M_;')"
+  else
+    eval "$(current_synccluster | sed 's;^;M_;')"
+  fi
 }
 
 default_roundcube_conf() {
@@ -331,7 +361,7 @@ install_owncloud() {
   pushd "$WWWDIR/owncloud" &>/dev/null
   su -c 'psql -c "DROP DATABASE IF EXISTS owncloud;"' postgres
   su -c 'psql -c "DROP ROLE IF EXISTS owncloud";' postgres
-  su -c 'psql -c "CREATE USER owncloud WITH PASSWORD '\'"${PASSWORD}owncloud"\''";' postgres
+  su -c "psql -c \"CREATE USER owncloud WITH PASSWORD '\'"${PASSWORD}owncloud"\''\";" postgres
   su -c 'psql -c "CREATE DATABASE owncloud OWNER=owncloud;"' postgres
   trap "sed -i 's;^\\(www-data:.*:\\).*;\\1/usr/sbin/nologin;' /etc/passwd" EXIT
   sed -i 's;^\(www-data:.*:\).*;\1/bin/bash;' /etc/passwd
@@ -499,7 +529,7 @@ generate_backup_rsync_list() {
 + /var/www/*/config/**
 + /opt
 + /opt/**
-- $MASSDIR
+- $MASSDIR*
 - $BACKUPDIR
 - *
 EOF
@@ -926,43 +956,114 @@ generate_synccluster_conf
 }
 
 snapshot() {
-  name="$1-$(date +%Y-%m-%d_%H-%M-%S)"
+  name="synccluster-snapshot-$1-$(date +%Y-%m-%d_%H-%M-%S)"
   mount | grep -E -e '^[^ ]* on / type btrfs ' -e '^[^ ]* on /home type btrfs ' | while read device on target type fs options; do
     while [ -e "$target/$name" ]; do
       name="$name.new"
     done
-    btrfs su cr "$target" "$target/$name"
+    btrfs subvolume snapshot "$target" "$target/$name"
   done
 }
 
+move_to_mass() {
+  local name="$1"
+  local path="$2"
+  local mass="$3"
+  local mountpoint="$MASSDIR/$name"
+
+  require_root
+  require_domain
+
+  local tmpdir="$(mktemp -d)"
+  trap "umount -l '$tmpdir'; rmdir '$tmpdir'" EXIT
+  
+  mount -o subvol=/ "/dev/disk/by-label/${DOMAIN}_$mass" "$tmpdir"
+  btrfs subvolume create "$tmpdir/$name"
+  local fstab="LABEL=$(btrfs filesystem label "$tmpdir") $mountpoint btrfs subvol=$name 0 0"
+  echo "$fstab" >> "$tmpdir/fstab"
+  echo "$fstab" >> /etc/fstab
+
+  rsync -aP "$path/" "$tmpdir/$name/"
+  rm -r "$path"
+  ln -s "$mountpoint" "$path"
+  mkdir -p "$mountpoint"
+  mount "$mountpoint"
+
+  umount -l "$tmpdir"
+  rmdir "$tmpdir"
+
+  trap EXIT
+}
+
+create_mass() {
+  local name="$1"
+  local device="$2"
+
+  require_root
+  require_domain
+
+  if ! [ -e "$device" ] || ! [ "$name" ]; then
+    showhelp
+  fi
+
+  echo "The device $device will be wiped clean. Continue ? (yes/NO)"
+  read answer
+  if [ "$answer" != "yes" ]; then
+    echo "Aborted."
+    exit 1
+  fi
+
+  dd if=/dev/zero of="$device" bs=16M count=4
+  dd if=/dev/zero of="$device" bs=1M seek="$(fdisk -l /dev/sda|grep 'Disk /' | cut -d' ' -f5)"
+
+  fdisk "$device" <<EOF
+o
+n
+p
+1
+
+
+w
+q
+EOF
+
+  mkfs.btrfs -f -L "${DOMAIN}_$name" "${device}1"
+
+  trap EXIT
+}
+
+require_root() {
+  if [ "$UID" -ne 0 ]; then
+    echo "This script requires to be root."
+    exit 1
+  fi
+}
+
 setup_master() {
-if [ "$UID" -ne 0 ]; then
-  echo "This script requires to be root."
-  exit 1
-fi
+  require_root
 
-echo "Set up this host as a master ? (y/n)"
-read answer
-[ "$answer" = "y" ] || exit 0
+  echo "Set up this host as a master ? (y/n)"
+  read answer
+  [ "$answer" = "y" ] || exit 0
 
-snapshot synccluster-before-setup-master
+  snapshot before-setup-master
 
-require_domain
-require_password
-require_mailrelay
+  require_domain
+  require_password
+  require_mailrelay
 
-generate_synccluster_conf
+  generate_synccluster_conf
 
-install_base_packages
-install_postfix
-install_dovecot
-install_unison
-install_roundcube
-install_owncloud
+  install_base_packages
+  install_postfix
+  install_dovecot
+  install_unison
+  install_roundcube
+  install_owncloud
 
-systemctl restart apache2
-systemctl restart postfix
-systemctl restart dovecot
+  systemctl restart apache2
+  systemctl restart postfix
+  systemctl restart dovecot
 }
 
 
@@ -1014,9 +1115,11 @@ owncloud_sync() {
   local target="$WWWDIR/owncloud/config/config.php"
   local src="/tmp/config.php"
 
+  require_master_conf
+
   trap "rm -f $src ${src}.tmp" EXIT
 
-  rsync -a "$MASTER_USER:$WWWDIR/owncloud/config/config.php" "/tmp/config.php"
+  rsync -a "$MASTER_USER:$M_WWWDIR/owncloud/config/config.php" "/tmp/config.php"
   grep -v -e "'instanceid'" -e "'passwordsalt'" -e "'secret'" -e ');' "$target" > "${target}.tmp"
   grep -e "'instanceid'" -e "'passwordsalt'" -e "'secret'" -e ');' "$src" >> "${target}.tmp"
   mv "${target}.tmp" "$target"
@@ -1032,7 +1135,7 @@ require_master() {
 
 setup_slave() {
 
-snapshot synccluster-before-setup-slave
+snapshot before-setup-slave
 
 require_master "$1"
 
@@ -1197,7 +1300,8 @@ trap EXIT
 
 unison_sync() {
 [ "$MASTER" ] || return
-rsync -a "$MASTER_USER":"$UNISON/_common.prf" "$UNISON"/ || true
+require_master_conf
+rsync -a "$MASTER_USER":"$M_UNISON/_common.prf" "$UNISON"/ || true
 
 # Synchronize content
 for f in "$UNISON"/[a-zA-Z0-9]*.prf; do
@@ -1219,17 +1323,19 @@ popd &>/dev/null
 
 www_sync() {
 [ "$MASTER" ] || return
-rsync -a --delete "$MASTER_USER":"$WWWDIR"/ "$WWWDIR"/
-rsync -a --delete "$MASTER_USER":"$CLOUDDIR"/ "$CLOUDDIR"/
+require_master_conf
+rsync -a --delete "$MASTER_USER":"$M_WWWDIR"/ "$WWWDIR"/
+rsync -a --delete "$MASTER_USER":"$M_CLOUDDIR"/ "$CLOUDDIR"/
 }
 
 conf_sync() {
 [ "$MASTER" ] || return
+require_master_conf
 rsync -a --delete "$MASTER_USER":/etc/apache2/ /etc/apache2/
 rsync -a --delete "$MASTER_USER":/etc/php5/ /etc/php5/
 rsync -a --delete "$MASTER_USER":/etc/postfix/ /etc/postfix/
 rsync -a --delete "$MASTER_USER":/etc/dovecot/ /etc/dovecot/
-rsync -a --delete "$MASTER_USER":"$UNISON"/ "$UNISON"/
+rsync -a --delete "$MASTER_USER":"$M_UNISON"/ "$UNISON"/
 owncloud_sync
 cert_sync
 }
@@ -1242,7 +1348,8 @@ rsync -a "$MASTER_USER":/etc/ssh/ssh_host_* /etc/ssh/
 
 mail_sync() {
 [ "$MASTER" ] || return
-rsync -a --delete "$MASTER_USER":"$MAILDIR"/ "$MAILDIR"/
+require_master_conf
+rsync -a --delete "$MASTER_USER":"$M_MAILDIR"/ "$MAILDIR"/
 rsync -a "$MASTER_USER":/etc/aliases /etc/aliases
 newaliases
 }
@@ -1322,11 +1429,12 @@ EOF
 install_nfs_client() {
   require_master "$1"
   require_packages nfs-common
+  require_master_conf
   grep -v nfs4 /etc/fstab > /tmp/fstab
   mkdir -p "$MASSDIR"
   cat >> /tmp/fstab <<EOF
 $MASTER:/ /home nfs4 rw,rsize=131072,wsize=131072 0 0
-$MASTER:${MASSDIR#/home} $MASSDIR nfs4 rw,rsize=131072,wsize=131072 0 0
+$MASTER:${M_MASSDIR#/home} $MASSDIR nfs4 rw,rsize=131072,wsize=131072 0 0
 EOF
 }
 
@@ -1342,7 +1450,7 @@ if [ -z "$MASTER" ]; then
   exit 1
 fi
 
-snapshot synccluster-before-promote
+snapshot before-promote
 
 ssh "$MASTER_USER" "systemctl disable apache2; systemctl disable dovecot; systemctl disable postfix" || true
 
@@ -1383,7 +1491,7 @@ install_owncloud_client() {
 
 setup_client() {
   require_master "$1"
-  snapshot synccluster-before-setup-client
+  snapshot before-setup-client
   install_synccluster
   generate_synccluster_conf
   upload_ssh_key
@@ -1395,7 +1503,7 @@ setup_client() {
 
 setup_roaming() {
   require_master "$1"
-  snapshot synccluster-before-setup-roaming
+  snapshot before-setup-roaming
   install_synccluster
   generate_synccluster_conf
   upload_ssh_key
@@ -1405,7 +1513,7 @@ setup_roaming() {
 }
 
 install_kodi() {
-  snapshot synccluster-before-install-kodi
+  snapshot before-install-kodi
   require_password
   require_packages kodi lightdm
 
@@ -1503,19 +1611,32 @@ group_del() {
 
 # Show info about the host
 info() {
+require_root
 if ! [ -e /etc/default/synccluster ]; then
   echo "synccluster is not installed on this machine"
   exit 1
 fi
-. /etc/default/synccluster
+require_domain
 if [ -z "$MASTER" ]; then
   echo "Master server"
 else
-  [ -z "$CLIENT" ] && echo "This is a slave server" || echo "This is a client"
   echo "Linked to master server $MASTER"
 fi
-echo "UNISON=$UNISON"
-echo "MAILDIR=$MAILDIR"
+
+echo ""
+echo "Users:"
+grep -E ':x:100[0-9][0-9]:' /etc/passwd | while IFS=: read user other; do
+  echo " $user"
+done
+echo ""
+echo "Groups:"
+grep -E ':x:100[0-9][0-9]:' /etc/group | while IFS=: read group other; do
+  echo " $group"
+done
+echo ""
+echo "Mass storage:"
+
+current_synccluster
 }
 
 help() {
