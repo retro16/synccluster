@@ -1159,10 +1159,6 @@ install_synccluster() {
 user_sync() {
 [ "$MASTER" ] || return
 
-# Synchronize users on master if it is a slave of another master.
-# Can be done for users since it is a cheap operation.
-ssh "$MASTER_USER" synccluster user_sync
-
 T="$(mktemp -d)"
 trap "rm -rf '$T'" EXIT
 
@@ -1229,8 +1225,6 @@ rsync -a --delete "$MASTER_USER":"$CLOUDDIR"/ "$CLOUDDIR"/
 
 conf_sync() {
 [ "$MASTER" ] || return
-# Synchronize the master to its masters before doing this operation
-ssh "$MASTER_USER" synccluster conf_sync
 rsync -a --delete "$MASTER_USER":/etc/apache2/ /etc/apache2/
 rsync -a --delete "$MASTER_USER":/etc/php5/ /etc/php5/
 rsync -a --delete "$MASTER_USER":/etc/postfix/ /etc/postfix/
@@ -1453,6 +1447,14 @@ master_exec() {
   fi
 }
 
+# Run a command on this host, and all its masters
+recursive_exec() {
+  if [ "$MASTER" ]; then
+    ssh "$MASTER_USER" "synccluster recursive_exec" "$@"
+  fi
+  "$@"
+}
+
 user_add() {
   login="$1"
   name="$2"
@@ -1463,7 +1465,7 @@ user_add() {
   [ "$newuid" ] && newuid="$((newuid + 1))" || newuid=10000
 
   master_exec useradd -c '' -d /home/$login -m -N -u $newuid
-  user_sync
+  recursive_exec user_sync
 }
 
 user_add_to() {
@@ -1472,14 +1474,14 @@ user_add_to() {
   [ "$login" ] && [ "$group" ] || help
 
   master_exec usermod -a -G $group $login
-  user_sync
+  recursive_exec user_sync
 }
 
 user_del() {
   login="$1"
+  # TODO remove home, cloud and roundcube data
   master_exec userdel -r $login
-  # TODO remove cloud and roundcube data
-  user_sync
+  recursive_exec user_sync
 }
 
 group_add() {
@@ -1490,13 +1492,13 @@ group_add() {
   [ "$newgid" ] && newgid="$((newgid + 1))" || newgid=10000
 
   master_exec groupadd -g $newgid
-  user_sync
+  recursive_exec user_sync
 }
 
 group_del() {
   group="$1"
   master_exec groupdel -r $group
-  user_sync
+  recursive_exec user_sync
 }
 
 # Show info about the host
@@ -1606,6 +1608,11 @@ $0 cert_sync
 $0 master_exec <command...>
     Executes a command on the master. Finds recursively the real master (a machine with no master) before running the command.
     This allows to run commands on the real top master, going through clients connected to slaves connected to a master.
+
+$0 recursive_exec <command...>
+    Executes a command on all masters and on this host, recursively.
+    The commands are executed on the topmost master first, then down to this host in the tree.
+    Note that other clients and slaves are not impacted, since they are not known by their masters.
 
 $0 info
     Show information about the current machine.
