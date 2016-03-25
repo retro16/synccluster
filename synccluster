@@ -72,7 +72,7 @@ CLOUDDIR='$CLOUDDIR'
 WWWDIR='$WWWDIR'
 BACKUPDIR='$BACKUPDIR'
 MAILDIR='$MAILDIR'
-UNISON='$UNISONDIR'
+UNISON='$UNISON'
 MIRROR='$MIRROR'
 DISTNAME='$DISTNAME'
 DOMAIN='$DOMAIN'
@@ -345,7 +345,7 @@ install_owncloud() {
   pushd "$WWWDIR/owncloud" &>/dev/null
   su -c 'psql -c "DROP DATABASE IF EXISTS owncloud;"' postgres
   su -c 'psql -c "DROP ROLE IF EXISTS owncloud";' postgres
-  su -c "psql -c \"CREATE USER owncloud WITH PASSWORD '\'"${PASSWORD}owncloud"\''\";" postgres
+  su -c 'psql -c "CREATE USER owncloud WITH PASSWORD '\'"${PASSWORD}owncloud"\'';"' postgres
   su -c 'psql -c "CREATE DATABASE owncloud OWNER=owncloud;"' postgres
   trap "sed -i 's;^\\(www-data:.*:\\).*;\\1/usr/sbin/nologin;' /etc/passwd" EXIT
   sed -i 's;^\(www-data:.*:\).*;\1/bin/bash;' /etc/passwd
@@ -983,7 +983,7 @@ move_data() {
   trap EXIT
 }
 
-create_data_device() {
+create_data_drive() {
   local name="$1"
   local device="$2"
 
@@ -1026,6 +1026,7 @@ setup_master() {
   require_password
   require_mailrelay
 
+  install_synccluster
   generate_synccluster_conf
 
   install_base_packages
@@ -1683,6 +1684,13 @@ $0 install_drives
     Autodetect and install all drives following the convention:
      Partition label = domain.example.tld.partlabel
      Contains a /fstab file that is appened to /etc/fstab
+
+$0 create_data_drive <name> <device>
+    Format a data drive with the correct filesystem and label.
+    Warning: all data on this drive is wiped.
+
+$0 move_data <drive_name> <volume_name> <path>
+    Move data in <path> to a volume created on the specified drive.
 
 $0 install_kodi
     Install the kodi media center as autoboot.
