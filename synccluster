@@ -26,10 +26,13 @@ SOFTWARE.
 
 LICENSE
 
-[ "$FLOCKER" != "$0" ] && exec env FLOCKER="$0" flock -e -w 1 "$0" "$0" "$@" || :
+SCRIPT="$(readlink -fs "$0")"
+SCRIPTNAME="$(basename "$SCRIPT")"
+[ "$FLOCKER" != "$SCRIPT" ] && exec env FLOCKER="$SCRIPT" flock -e -w 1 "$SCRIPT" "$0" "$@" || :
 
 set -e
 
+unset ROLE
 unset MASTER
 unset MASTER_USER
 unset DATADIR
@@ -47,6 +50,7 @@ unset MAILRELAY
 # Generate a synccluster file suitable for a new master
 default_synccluster() {
   cat <<EOF
+ROLE=''
 MASTER='$MASTER'
 MASTER_USER='$MASTER_USER'
 DATADIR='/home/.local'
@@ -65,6 +69,7 @@ EOF
 
 current_synccluster() {
   cat <<EOF
+ROLE='$ROLE'
 MASTER='$MASTER'
 MASTER_USER='$MASTER_USER'
 DATADIR='$DATADIR'
@@ -87,6 +92,7 @@ eval "$(default_synccluster)"
 [ -e "/etc/default/synccluster" ] && . /etc/default/synccluster
 
 export PASSWORD=''
+export ROLE
 export MASTER
 export MASTER_USER
 export DATADIR
@@ -136,7 +142,7 @@ generate_synccluster_conf() {
 }
 
 require_master_conf() {
-  if [ "$MASTER" ]; then
+  if [ "$ROLE" != "master" ]; then
     eval "$(ssh "$MASTER_USER" "cat /etc/default/synccluster" | sed 's;^;M_;')"
   else
     eval "$(current_synccluster | sed 's;^;M_;')"
@@ -411,6 +417,9 @@ restore_master() {
     fetch_backup_conf "$src/fs/etc/default/synccluster"
   fi
 
+  ROLE=master
+  generate_synccluster_conf
+
   # Setup this machine as a master
   [ "$skip_setup_master" ] || setup_master
 
@@ -432,6 +441,7 @@ restore_master() {
   done
   rm -r /tmp/newusers
 
+  # Restore database
   rsync -aP --include-from="/tmp/rsync_list" "$src/fs/" "/"
   if [ "${src#*:}" != "$src" ]; then
     ssh "$MASTER_USER" "[ -e '${src#*:}/postgres.xz' ]" && ssh "$MASTER_USER" "cat '${src#*:}/postgres.xz'" | su -c "unxz -c | grep -Pv '^(?:CREATE|DROP|ALTER) ROLE postgres' | psql" postgres
@@ -1167,6 +1177,8 @@ setup_master() {
   read answer
   [ "$answer" = "y" ] || exit 0
 
+  ROLE=master
+
   snapshot before-setup-master
 
   require_domain
@@ -1233,7 +1245,9 @@ ignore = Path Documents/HTC
 EOF
 }
 
-owncloud_sync() {
+owncloud_conf_sync() {
+  [ "$ROLE" != master ] || return
+
   local target="$WWWDIR/owncloud/config/config.php"
   local src="/tmp/config.php"
 
@@ -1241,14 +1255,17 @@ owncloud_sync() {
 
   trap "rm -f $src ${src}.tmp" EXIT
 
-  rsync -a "$MASTER_USER:$M_WWWDIR/owncloud/config/config.php" "/tmp/config.php"
+  rsync -a "$MASTER_USER:$M_WWWDIR/owncloud/config/config.php" "$src"
   grep -v -e "'instanceid'" -e "'passwordsalt'" -e "'secret'" -e "'version'" -e ');' "$target" > "${target}.tmp"
   grep -e "'instanceid'" -e "'passwordsalt'" -e "'secret'" -e "'version'" -e ');' "$src" >> "${target}.tmp"
   mv "${target}.tmp" "$target"
 
-  rsync -a --delete "$MASTER_USER:$M_CLOUDDIR/" "$CLOUDDIR/"
-
   trap EXIT
+}
+
+cloud_sync() {
+  require_master_conf
+  [ -z "$M_CLOUDDIR" ] || [ -z "$CLOUDDIR" ] || rsync -a --delete "$MASTER_USER:$M_CLOUDDIR/" "$CLOUDDIR/"
 }
 
 require_master() {
@@ -1276,6 +1293,49 @@ echo "Set up this host as a slave to $MASTER ? (y/n)"
 read answer
 [ "$answer" = "y" ] || exit 0
 
+ROLE=slave
+
+require_password
+install_base_packages
+
+# Install synccluster on this machine
+install_synccluster
+generate_synccluster_conf
+install_synccluster_cron
+
+upload_ssh_key
+fetch_master_conf
+install_postfix
+install_dovecot
+install_unison
+install_roundcube
+install_owncloud
+
+echo "Synchronize data with master"
+sync
+}
+
+setup_standby() {
+
+snapshot before-setup-standby
+
+require_master "$1"
+
+if [ "$UID" -ne 0 ]; then
+  if which sudo &>/dev/null; then
+    sudo "$@"
+  else
+    echo "This script requires to be root."
+    exit 1
+  fi
+fi
+
+echo "Set up this host as a standby to $MASTER ? (y/n)"
+read answer
+[ "$answer" = "y" ] || exit 0
+
+ROLE=standby
+
 require_password
 install_base_packages
 
@@ -1294,6 +1354,7 @@ set -e
 
 # Install synccluster on this machine
 install_synccluster
+generate_synccluster_conf
 install_synccluster_cron
 
 upload_ssh_key
@@ -1301,11 +1362,6 @@ fetch_master_conf
 install_postfix
 install_dovecot
 install_unison
-install_roundcube
-install_owncloud
-
-owncloud_sync
-cert_sync
 
 echo "Synchronize data with master"
 sync
@@ -1385,8 +1441,6 @@ install_synccluster() {
 }
 
 user_sync() {
-[ "$MASTER" ] || return
-
 T="$(mktemp -d)"
 trap "rm -rf '$T'" EXIT
 
@@ -1425,61 +1479,50 @@ trap EXIT
 }
 
 unison_sync() {
-[ "$MASTER" ] || return
-[ "$UNISON" ] || return
-require_master_conf
-[ "$M_UNISON" ] || return
+  [ "$UNISON" ] || return
+  require_master_conf
 
-rsync -a "$MASTER_USER":"$M_UNISON/_common.prf" "$UNISON"/ || true
-
-# Synchronize content
-for f in "$UNISON"/[a-zA-Z0-9]*.prf; do
-  user="$(basename "$f" .prf)"
-  if grep -E "^$user:" /etc/passwd &>/dev/null; then
-    unison "$user"
-  fi
-done
+  # Synchronize content
+  for f in "$UNISON"/[a-zA-Z0-9]*.prf; do
+    user="$(basename "$f" .prf)"
+    if grep -E "^$user:" /etc/passwd &>/dev/null; then
+      unison "$user"
+    fi
+  done
 }
 
 postgres_sync() {
-[ "$MASTER" ] || return
-pushd / &>/dev/null
-ssh "$MASTER_USER" \
-    "cd /; su -c 'pg_dumpall -c | xz -c -6' postgres" \
-  | su -c 'unxz -c | grep -Pv "^(?:CREATE|DROP|ALTER) ROLE postgres" | psql -q' postgres >/dev/null
-popd &>/dev/null
-}
-
-www_sync() {
-[ "$MASTER" ] || return
-require_master_conf
-rsync -a --delete "$MASTER_USER":"$M_WWWDIR"/ "$WWWDIR"/
+  pushd / &>/dev/null
+  ssh "$MASTER_USER" \
+      "cd /; su -c 'pg_dumpall -c | xz -c -6' postgres" \
+    | su -c 'unxz -c | grep -Pv "^(?:CREATE|DROP|ALTER) ROLE postgres" | psql -q' postgres >/dev/null
+  popd &>/dev/null
 }
 
 conf_sync() {
-[ "$MASTER" ] || return
-require_master_conf
-rsync -a --delete "$MASTER_USER":/etc/apache2/ /etc/apache2/
-rsync -a --delete "$MASTER_USER":/etc/php5/ /etc/php5/
-rsync -a --delete "$MASTER_USER":/etc/postfix/ /etc/postfix/
-rsync -a --delete "$MASTER_USER":/etc/dovecot/ /etc/dovecot/
-rsync -a --delete "$MASTER_USER":"$M_UNISON"/ "$UNISON"/
-owncloud_sync
-cert_sync
+  require_master_conf
+  if [ "$ROLE" = standby ]; then
+    rsync -a --delete "$MASTER_USER:/etc/{apache2,php5,postfix,dovecot}" /etc/
+    rsync -a --delete "$MASTER_USER:$M_WWWDIR/roundcubemail/config/" "$WWWDIR/roundcubemail/config/"
+    rsync -a --delete "$MASTER_USER:$M_WWWDIR/owncloud/config/" "$WWWDIR/owncloud/config/"
+    [ -z "$M_UNISON" ] || [ -z "$UNISON" ] || rsync -a --delete "$MASTER_USER:$M_UNISON/" "$UNISON"/
+    cert_sync
+  else
+    owncloud_conf_sync
+  fi
 }
 
 cert_sync() {
-rsync -a "$MASTER_USER":/etc/ssl/certs/ssl-cert-snakeoil.pem /etc/ssl/certs/ssl-cert-snakeoil.pem
-rsync -a "$MASTER_USER":/etc/ssl/private/ssl-cert-snakeoil.key /etc/ssl/private/ssl-cert-snakeoil.key
-rsync -a "$MASTER_USER":/etc/ssh/ssh_host_* /etc/ssh/
+  rsync -a "$MASTER_USER":/etc/ssl/certs/ssl-cert-snakeoil.pem /etc/ssl/certs/ssl-cert-snakeoil.pem
+  rsync -a "$MASTER_USER":/etc/ssl/private/ssl-cert-snakeoil.key /etc/ssl/private/ssl-cert-snakeoil.key
+  rsync -a "$MASTER_USER":/etc/ssh/ssh_host_* /etc/ssh/
 }
 
 mail_sync() {
-[ "$MASTER" ] || return
-require_master_conf
-rsync -a --delete "$MASTER_USER":"$M_MAILDIR"/ "$MAILDIR"/
-rsync -a "$MASTER_USER":/etc/aliases /etc/aliases
-newaliases
+  require_master_conf
+  rsync -a --delete "$MASTER_USER":"$M_MAILDIR"/ "$MAILDIR"/
+  rsync -a "$MASTER_USER":/etc/aliases /etc/aliases
+  newaliases
 }
 
 install_drives() {
@@ -1527,23 +1570,49 @@ trap EXIT
 }
 
 sync() {
-[ "$MASTER" ] || return
-quick_sync
-postgres_sync
-www_sync
-mail_sync
+  quick_sync
+  case "$ROLE" in
+    slave)
+      postgres_sync
+      cloud_sync
+      mail_sync
+      conf_sync
+      systemctl restart apache2
+      systemctl restart postfix
+      systemctl restart dovecot
+      ;;
+    standby)
+      postgres_sync
+      cloud_sync
+      mail_sync
+      conf_sync
+      cert_sync
+      ;;
+    client)
+      ;;
+    roaming)
+      ;;
+  esac
 }
 
 quick_sync() {
-[ "$MASTER" ] || return
-user_sync
-unison_sync
-}
-
-# Synchronize a client
-client_sync() {
-[ "$MASTER" ] || return
-user_sync
+  case "$ROLE" in
+    slave)
+      user_sync
+      unison_sync
+      ;;
+    standby)
+      user_sync
+      unison_sync
+      ;;
+    client)
+      user_sync
+      ;;
+    roaming)
+      user_sync
+      unison_sync
+      ;;
+  esac
 }
 
 install_nfs_server() {
@@ -1620,23 +1689,25 @@ setup_client() {
   snapshot before-setup-client
   install_synccluster
   UNISON=
+  ROLE=client
   generate_synccluster_conf
   upload_ssh_key
   install_owncloud_client
   install_nfs_client
   install_synccluster_client_sync
-  client_sync
+  sync
 }
 
 setup_roaming() {
   require_master "$1"
   snapshot before-setup-roaming
   install_synccluster
+  ROLE=roaming
   generate_synccluster_conf
   upload_ssh_key
   install_owncloud_client
   install_synccluster_client_sync
-  roaming_sync
+  sync
 }
 
 install_kodi() {
@@ -1807,116 +1878,116 @@ popd &>/dev/null
 
 help() {
   cat <<EOF
-$0: Setup and manage synchronization between different hosts.
+$SCRIPTNAME: Setup and manage synchronization between different hosts.
 The following commands are available:
 
-$0 setup_master
+$SCRIPTNAME setup_master
     Setup this machine as a new master.
 
-$0 setup_slave root@host.domain.tld
+$SCRIPTNAME setup_slave root@host.domain.tld
     Setup this machine as a slave to another machine.
 
-$0 setup_client root@host.domain.tld
+$SCRIPTNAME setup_client root@host.domain.tld
     Setup this machine as a client of another machine (either a master or a slave).
 
-$0 setup_roaming root@host.domain.tld
+$SCRIPTNAME setup_roaming root@host.domain.tld
     Setup this machine as a roaming client.
 
-$0 promote
+$SCRIPTNAME promote
     Promote the current slave as a master.
     This cannot be undone.
 
-$0 setup_sudo
+$SCRIPTNAME setup_sudo
     Setup the sudo utility to allow normal users to gain superuser privileges.
 
-$0 install_bluetooth
+$SCRIPTNAME install_bluetooth
     Setup bluetooth power on boot
 
-$0 install_upnpc
+$SCRIPTNAME install_upnpc
     Setup UPNP broadcaster to open external ports on this machine
 
-$0 install_modem
+$SCRIPTNAME install_modem
     Install LaBox MODEM autoconfiguration. Warning: opens passwordless WiFi.
 
-$0 install_drives
+$SCRIPTNAME install_drives
     Autodetect and install all drives following the convention:
      Partition label = domain.example.tld.partlabel
      Contains a /fstab file that is appened to /etc/fstab
 
-$0 create_data_drive <name> <device>
+$SCRIPTNAME create_data_drive <name> <device>
     Format a data drive with the correct filesystem and label.
     Warning: all data on this drive is wiped.
 
-$0 move_data <drive> <volume> <path>
+$SCRIPTNAME move_data <drive> <volume> <path>
     Move data in <path> to a volume created on the specified drive.
 
-$0 remove_data_volume <drive> <volume>
+$SCRIPTNAME remove_data_volume <drive> <volume>
     Remove a volume from a drive.
     The volume will be unmounted, uninstalled and deleted permanently.
 
-$0 wipe_data_drive <drive>
+$SCRIPTNAME wipe_data_drive <drive>
     Remove all data from a drive and wipe its content.
     All mounted volumes will be unmounted before proceeding.
 
-$0 install_kodi
+$SCRIPTNAME install_kodi
     Install the kodi media center as autoboot.
     Once installed, the PC will autologin to the kodi media center.
 
-$0 backup [source] [target]
+$SCRIPTNAME backup [source] [target]
     Backup a whole machine from source to target. source or target may be a remote path (root@host:/) but not both.
     By default, backup the local machine to the local backup directory.
 
-$0 restore_master <source>
+$SCRIPTNAME restore_master <source>
     Create a new master on this host and restore data from a backup. <source> must point at a directory created with the backup command.
     <source> may be a local or a remote path.
 
-$0 periodic_backup <source>
+$SCRIPTNAME periodic_backup <source>
     Setup a periodic backup of the remote server.
     Example: periodic_backup remote.host.example.tld:/
 
-$0 external_backup <source>
+$SCRIPTNAME external_backup <source>
     Setup a periodic backup of a raw rsync path.
 
-$0 user_add <username> <realname> <group>
+$SCRIPTNAME user_add <username> <realname> <group>
     Add a new user. If executed from a slave or a client, creates the user on the master.
 
-$0 user_add_to <username> <group>
+$SCRIPTNAME user_add_to <username> <group>
     Add a user to a group. Propagates to the master.
 
-$0 group_add <groupname>
+$SCRIPTNAME group_add <groupname>
     Add a new group. If executed from a slave or a client, creates the group on the master.
 
-$0 user_del <username>
+$SCRIPTNAME user_del <username>
     Removes a user and ALL ITS DATA. If executed from a slave or a client, deletes the user and its data on the master.
 
-$0 group_del <groupname>
+$SCRIPTNAME group_del <groupname>
     Remove a group. If executed from a slave or a client, removes the group on the master.
 
-$0 user_sync
+$SCRIPTNAME user_sync
     Synchronize users.
 
-$0 sync
+$SCRIPTNAME sync
     Synchronize data.
 
-$0 quick_sync
+$SCRIPTNAME quick_sync
     Differential update to data sync.
 
-$0 owncloud_sync
+$SCRIPTNAME owncloud_sync
     Synchronize owncloud configuration.
 
-$0 cert_sync
+$SCRIPTNAME cert_sync
     Synchronize SSL certificate and SSH host key.
 
-$0 master_exec <command...>
+$SCRIPTNAME master_exec <command...>
     Executes a command on the master. Finds recursively the real master (a machine with no master) before running the command.
     This allows to run commands on the real top master, going through clients connected to slaves connected to a master.
 
-$0 recursive_exec <command...>
+$SCRIPTNAME recursive_exec <command...>
     Executes a command on all masters and on this host, recursively.
     The commands are executed on the topmost master first, then down to this host in the tree.
     Note that other clients and slaves are not impacted, since they are not known by their masters.
 
-$0 info
+$SCRIPTNAME info
     Show information about the current machine.
 EOF
   exit 0
