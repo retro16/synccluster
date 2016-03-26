@@ -26,6 +26,7 @@ SOFTWARE.
 
 LICENSE
 
+[ "$FLOCKER" != "$0" ] && exec env FLOCKER="$0" flock -e -w 1 "$0" "$0" "$@" || :
 
 set -e
 
@@ -101,17 +102,19 @@ export DOMAIN
 export MAILRELAY
 
 
-roundcube_version="1.1.4"
-owncloud_version="9.0.0"
-roundcube_url="http://downloads.sourceforge.net/project/roundcubemail/roundcubemail/$roundcube_version/roundcubemail-$roundcube_version-complete.tar.gz"
-owncloud_url="https://download.owncloud.org/community/owncloud-${owncloud_version}.tar.bz2"
-cygwin_url="https://cygwin.com/setup-x86_64.exe"
-cygwin_mirror="http://mirror.switch.ch/ftp/mirror/cygwin"
-cygwin_install_dir="C:\\cygwin_synccluster"
-cygwin_packages="bash,wget,rsync,unison"
-cygwin_install_command="setup-x86_64.exe -D -R $cygwin_install_dir -s $cygwin_mirror -P $cygwin_packages -a x86_64 -q -B -l $cygwin_install_dir\\install -N -d"
+export roundcube_version="1.1.4"
+export owncloud_version="9.0.0"
+export roundcube_url="http://downloads.sourceforge.net/project/roundcubemail/roundcubemail/$roundcube_version/roundcubemail-$roundcube_version-complete.tar.gz"
+export owncloud_url="https://download.owncloud.org/community/owncloud-${owncloud_version}.tar.bz2"
+export cygwin_url="https://cygwin.com/setup-x86_64.exe"
+export cygwin_mirror="http://mirror.switch.ch/ftp/mirror/cygwin"
+export cygwin_install_dir="C:\\cygwin_synccluster"
+export cygwin_packages="bash,wget,rsync,unison"
+export cygwin_install_command="setup-x86_64.exe -D -R $cygwin_install_dir -s $cygwin_mirror -P $cygwin_packages -a x86_64 -q -B -l $cygwin_install_dir\\install -N -d"
 
 [ "$(uname -o)" = "Cygwin" ] && cygwin=1 || cygwin=""
+
+lock=/var/lock/synccluster
 
 require_domain() {
   [ "$DOMAIN" ] || DOMAIN="$1"
@@ -268,6 +271,7 @@ smtpd_tls_session_cache_database = btree:\${data_directory}/smtpd_scache
 smtpd_use_tls = yes
 EOF
 }
+
 install_postfix() {
   require_packages postfix
   local target="$1"; [ "$target" ] || target="/etc/postfix"; shift || true
@@ -515,6 +519,54 @@ generate_backup_rsync_list() {
 + /opt/**
 - *
 EOF
+}
+
+change_hostname() {
+  local new="$1"
+  local current="$(hostname -f)"
+
+  require_root
+  require_domain
+
+  local newdomain="${new#*.}"
+  local newhost="${new%%.*}"
+  
+  if [ "$DOMAIN" != "$newdomain" ]; then
+    # Update domain name
+    #  update config files
+    sed -i "/config.*'default_host'/s/'$DOMAIN'/'$newdomain'/" "$WWWDIR/roundcubemail/config/config.inc.php"
+    sed -i "/config.*'smtp_server'/s/'$DOMAIN'/'$newdomain'/" "$WWWDIR/roundcubemail/config/config.inc.php"
+    sed -i "/0 => '/s/'$DOMAIN'/'$newdomain'/" "$WWWDIR/owncloud/config/config.php"
+    sed -i "s/^myhostname *=/myhostname = $newdomain" "/etc/postfix/main.cf"
+    sed -i "s/^mydestination *=/mydestination = $newdomain, localhost" "/etc/postfix/main.cf"
+
+    #  update drive labels
+    pushd /etc/disk/by-label &>/dev/null
+    
+    local tmpdir="$(mktemp -d)"
+    trap "umount -l '$tmpdir'; rmdir '$tmpdir'" EXIT
+
+    for label in "${DOMAIN}="*; do
+      mount -o subvol=/ "/dev/disk/by-label/$label" "$tmpdir"
+      newlabel="$newdomain=${label#*=}"
+      btrfs filesystem label "$newlabel" "$tmpdir"
+      sed -i "s/^LABEL=$label /LABEL=$newlabel /" "$tmpdir/fstab"
+      umount "$tmpdir"
+    done
+
+    rmdir "$tmpdir"
+    trap EXIT
+    popd &>/dev/null
+
+    DOMAIN="newdomain"
+    generate_synccluster_conf
+  fi
+
+  # Update host name
+  sed -i "s;^127\.0\.1\.1.*$current;127.0.1.1 $new $newhost;" /etc/hosts
+  echo "$newhost" > /etc/hostname
+ 
+  echo "You need to reboot for the changes to take effect."
 }
 
 backup() {
@@ -991,7 +1043,7 @@ create_data_drive() {
   require_domain
 
   if ! [ -e "$device" ] || ! [ "$name" ]; then
-    showhelp
+    help
   fi
 
   echo "The device $device will be formatted, all data on it will be lost. Continue ? (yes/NO)"
@@ -1017,7 +1069,7 @@ remove_data_volume() {
   local realdevice="$(readlink -fs "/dev/disk/by-label/$device")"
 
   if ! [ "$name" ] || ! [ "$drive" ]; then
-    showhelp
+    help
   fi
 
   fstabline="$(grep -E "^LABEL=$device .*[, ]subvol=$name[, ]" /etc/fstab)"
@@ -1072,7 +1124,7 @@ wipe_data_drive() {
   local realdevice="$(readlink -fs "/dev/disk/by-label/$device")"
 
   if ! [ "$name" ]; then
-    showhelp
+    help
   fi
 
   if ! [ -e "/dev/disk/by-label/$device" ]; then
@@ -1190,9 +1242,11 @@ owncloud_sync() {
   trap "rm -f $src ${src}.tmp" EXIT
 
   rsync -a "$MASTER_USER:$M_WWWDIR/owncloud/config/config.php" "/tmp/config.php"
-  grep -v -e "'instanceid'" -e "'passwordsalt'" -e "'secret'" -e ');' "$target" > "${target}.tmp"
-  grep -e "'instanceid'" -e "'passwordsalt'" -e "'secret'" -e ');' "$src" >> "${target}.tmp"
+  grep -v -e "'instanceid'" -e "'passwordsalt'" -e "'secret'" -e "'version'" -e ');' "$target" > "${target}.tmp"
+  grep -e "'instanceid'" -e "'passwordsalt'" -e "'secret'" -e "'version'" -e ');' "$src" >> "${target}.tmp"
   mv "${target}.tmp" "$target"
+
+  rsync -a --delete "$MASTER_USER:$M_CLOUDDIR/" "$CLOUDDIR/"
 
   trap EXIT
 }
@@ -1311,9 +1365,10 @@ done
 if grep -E "^sudo:x:" &>/dev/null "$groupnewfile"; then
   grep -vE "^sudo:x:" "$groupnewfile" > "$groupnewfile."
   sudoers="$(grep -E "^sudo:x:" "$groupnewfile" | cut -d: -f1-3)"
-  cut -d: -f4 | tr ',' '\n' | while read user; do
+  cat "$groupfile" | cut -d: -f4 | tr ',' '\n' | while read user; do
     if grep -E "^$user:x:100[0-9][0-9]:" "$passwdnewfile"; then
       sudoers="$sudoers$user,"
+      break
     fi
   done
   echo "${sudoers:0: -1}" >> "$groupnewfile."
@@ -1358,11 +1413,12 @@ grep -E ":x:100[0-9][0-9]:" /etc/passwd | while IFS=':' read user pass uid gid n
     echo "User $user was removed. Home directory left untouched."
     rm -f "$UNISON/$user.prf"
     userdel "$user"
-  else
-    dir /var/spool/cron/crontabs.master
-    rsync -a "$MASTER_USER":/var/spool/cron/crontabs/"$user" /var/spool/cron/crontabs.master/
   fi
 done
+
+# Synchronize crontabs
+dir /var/spool/cron/crontabs.master
+rsync -a "$MASTER_USER":/var/spool/cron/crontabs/ /var/spool/cron/crontabs.master/
 
 rm -rf "$T"
 trap EXIT
@@ -1398,7 +1454,6 @@ www_sync() {
 [ "$MASTER" ] || return
 require_master_conf
 rsync -a --delete "$MASTER_USER":"$M_WWWDIR"/ "$WWWDIR"/
-rsync -a --delete "$MASTER_USER":"$M_CLOUDDIR"/ "$CLOUDDIR"/
 }
 
 conf_sync() {
