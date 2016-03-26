@@ -994,7 +994,7 @@ create_data_drive() {
     showhelp
   fi
 
-  echo "The device $device will be wiped clean. Continue ? (yes/NO)"
+  echo "The device $device will be formatted, all data on it will be lost. Continue ? (yes/NO)"
   read answer
   if [ "$answer" != "yes" ]; then
     echo "Aborted."
@@ -1004,6 +1004,101 @@ create_data_drive() {
   local label="${DOMAIN}=$name"
 
   mkfs.btrfs -f -L "$label" "$device"
+}
+
+remove_data_volume() {
+  local drive="$1"
+  local name="$2"
+  
+  require_root
+  require_domain
+
+  local device="${DOMAIN}=$drive"
+  local realdevice="$(readlink -fs "/dev/disk/by-label/$device")"
+
+  if ! [ "$name" ] || ! [ "$drive" ]; then
+    showhelp
+  fi
+
+  fstabline="$(grep -E "^LABEL=$device .*[, ]subvol=$name[, ]" /etc/fstab)"
+
+  if ! [ "$fstabline" ]; then
+    echo "Subvolume $name could not be found in drive $drive. Aborting."
+    exit 1
+  fi
+
+  echo "The subvolume $name of the drive $drive ($realdevice) will be deleted and all its data will be lost. Continue ? (yes/NO)"
+  
+  read answer
+  if [ "$answer" != "yes" ]; then
+    echo "Aborted."
+    exit 1
+  fi
+
+  # Remove the entry in /etc/fstab
+  read d mountpoint other <<< "$fstabline"
+  grep -v -E "^LABEL=$device .*$mountpoint .*subvol=$name[, ]" /etc/fstab > /etc/fstab_ || true
+  mv /etc/fstab_ /etc/fstab
+
+  # Unmount the mount point
+  umount -l "$mountpoint"
+
+  # Remove the entry in the fstab of the drive
+  local tmpdir="$(mktemp -d)"
+  trap "umount -l '$tmpdir'; rmdir '$tmpdir'" EXIT
+  mount -o subvol=/ "/dev/disk/by-label/$device" "$tmpdir"
+
+  grep -v -E "^LABEL=$device .*$mountpoint .*subvol=$name[, ]" "$tmpdir/fstab" > "$tmpdir/fstab_" || true
+  mv "$tmpdir/fstab_" "$tmpdir/fstab"
+  btrfs subvolume delete "$tmpdir/$name"
+
+  # Remove drive fstab if empty
+  if [ "$(wc -l "$tmpdir/fstab" | cut -d' ' -f1)" -eq 0 ]; then
+    rm "$tmpdir/fstab"
+  fi
+
+  umount -l "$tmpdir"
+  rmdir "$tmpdir"
+  trap EXIT
+}
+
+wipe_data_drive() {
+  local name="$1"
+  
+  require_root
+  require_domain
+
+  local device="${DOMAIN}=$name"
+  local realdevice="$(readlink -fs "/dev/disk/by-label/$device")"
+
+  if ! [ "$name" ]; then
+    showhelp
+  fi
+
+  if ! [ -e "/dev/disk/by-label/$device" ]; then
+    echo "Drive $name could not be found. Aborting."
+    exit 1
+  fi
+
+  echo "The drive $name ($realdevice) will be deleted and all its data will be lost. Continue ? (yes/NO)"
+  
+  read answer
+  if [ "$answer" != "yes" ]; then
+    echo "Aborted."
+    exit 1
+  fi
+
+  # Unmount all volumes of the drive
+  grep -E "^LABEL=$device " /etc/fstab | while read d mountpoint other; do
+    umount "$mountpoint"
+  done
+
+  # Remove all entries from the fstab
+  grep -v -E "^LABEL=$device " /etc/fstab > /etc/fstab_ || true
+  mv /etc/fstab_ /etc/fstab
+
+  # Trash the device to remove all its data
+  dd if=/dev/zero of="/dev/disk/by-label/$device" bs=1M count=64
 }
 
 require_root() {
@@ -1348,7 +1443,7 @@ tmpdir="$(mktemp -d)"
 pushd /dev/disk/by-label &>/dev/null
 for d in $pattern; do
   trap "rm -f /tmp/fstab; umount '$tmpdir'; rmdir '$tmpdir'" EXIT
-  mount -r "$d" "$tmpdir"
+  mount -r "$d" "$tmpdir" || continue
   if [ -e "$tmpdir/fstab" ]; then
     grep -F -f <(cut -d' ' -f1 "$tmpdir/fstab") -v /etc/fstab > /tmp/fstab
     cat "$tmpdir/fstab" >> /tmp/fstab
@@ -1373,6 +1468,7 @@ done
 popd &>/dev/null
 
 rm -r "$tmpdir"
+trap EXIT
 }
 
 sync() {
@@ -1548,7 +1644,7 @@ user_add() {
   newuid="$(cut -d: -f3 /etc/passwd | grep -E '100[0-9][0-9]'|sort -nr)"
   [ "$newuid" ] && newuid="$((newuid + 1))" || newuid=10000
 
-  master_exec useradd -c '' -d /home/$login -m -N -u $newuid
+  master_exec useradd -c '' -d /home/$login -m -N -u $newuid $login
   recursive_exec user_sync
 }
 
@@ -1575,7 +1671,7 @@ group_add() {
   newgid="$(cut -d: -f3 /etc/group | grep -E '100[0-9][0-9]'|sort -nr)"
   [ "$newgid" ] && newgid="$((newgid + 1))" || newgid=10000
 
-  master_exec groupadd -g $newgid
+  master_exec groupadd -g $newgid $group
   recursive_exec user_sync
 }
 
@@ -1600,51 +1696,58 @@ else
 fi
 
 echo ""
+echo ""
 echo "Users:"
 grep -E ':x:100[0-9][0-9]:' /etc/passwd | while IFS=: read user other; do
   echo " $user"
 done
+echo ""
 echo ""
 echo "Groups:"
 grep -E ':x:100[0-9][0-9]:' /etc/group | while IFS=: read group other; do
   echo " $group"
 done
 echo ""
+echo ""
 echo "Mass storage:"
+echo ""
 
 pushd /dev/disk/by-label &>/dev/null
 local tmpdir="$(mktemp -d)"
 trap "umount -l '$tmpdir'; rmdir '$tmpdir'" EXIT
 for d in "${DOMAIN}"=*; do
 
-  name="${d#*_}"
+  name="${d#*=}"
+  realdevice="$(readlink -fs "/dev/disk/by-label/$d")"
+
   mount "$d" "$tmpdir"
   read device total used available percent mp <<< "$(df -h "$tmpdir" | tail -1)"
 
-  echo "Device $name:"
-  echo " Used: $used ($percent)   Free: $available"
+  echo "  Device $name ($realdevice):"
+  echo "    Used: $used ($percent)   Free: $available"
 
   if ! [ -e "$tmpdir/fstab" ]; then
-    echo " Not installed"
+    echo "    No subvolume"
+    echo ""
     umount "$tmpdir"
     continue
   fi
 
   while read device mountpoint filetype options dump pass; do
-    subvol="$(sed 's;.*subvol=\([^ ,]*\);\1;')"
-    mount | grep -F " $mountpoint " &>/dev/null && mounted=mounted || mounted='not mounted'
-    if grep -E "$device.*$mountpoint.*$filetype" /etc/fstab; then
-      echo " Subvolume $subvol on $mountpoint ($mounted)"
+    subvol="$(sed 's;.*subvol=\([^ ,]*\);\1;' <<< "$options")"
+    mounted='not declared'
+    if grep -E "$device.*$mountpoint.*$filetype" /etc/fstab &>/dev/null; then
+      mount | grep -F " $mountpoint " &>/dev/null && mounted=mounted || mounted='not mounted'
     fi
+    echo "    Subvolume $subvol on $mountpoint ($mounted)"
   done < "$tmpdir/fstab"
 
   umount "$tmpdir"
+  echo ""
 done
 rmdir "$tmpdir"
 trap EXIT
 popd &>/dev/null
-
-current_synccluster
 }
 
 help() {
@@ -1689,8 +1792,16 @@ $0 create_data_drive <name> <device>
     Format a data drive with the correct filesystem and label.
     Warning: all data on this drive is wiped.
 
-$0 move_data <drive_name> <volume_name> <path>
+$0 move_data <drive> <volume> <path>
     Move data in <path> to a volume created on the specified drive.
+
+$0 remove_data_volume <drive> <volume>
+    Remove a volume from a drive.
+    The volume will be unmounted, uninstalled and deleted permanently.
+
+$0 wipe_data_drive <drive>
+    Remove all data from a drive and wipe its content.
+    All mounted volumes will be unmounted before proceeding.
 
 $0 install_kodi
     Install the kodi media center as autoboot.
