@@ -1647,15 +1647,19 @@ fi
 
 snapshot before-promote
 
-ssh "$MASTER_USER" "systemctl disable apache2; systemctl disable dovecot; systemctl disable postfix" || true
+# Try to disable the current master
+master_exec "systemctl disable apache2; systemctl disable dovecot; systemctl disable postfix" || true
 
-unset MASTER
-unset MASTER_USER
-
+# Mail relay may be different for this new master, so adjust it.
 read -i "$MAILRELAY" -p 'Mail relay of the new master:' MAILRELAY
-generate_synccluster_conf
 sed -i "s;^relayhost *=.*;relayhost = $MAILRELAY;" /etc/postfix/main.cf
 
+# Promote as master
+unset MASTER
+unset MASTER_USER
+generate_synccluster_conf
+
+# Start services
 systemctl enable apache2
 systemctl start apache2
 
@@ -1746,19 +1750,33 @@ EOF
 
 # Run a command on the master
 master_exec() {
+  set +e
+  local rv
   if [ "$MASTER" ]; then
     ssh "$MASTER_USER" "synccluster master_exec" "$@"
+    rv="$?"
   else
     "$@"
+    rv="$?"
   fi
+  set -e
+  return $rv
 }
 
 # Run a command on this host, and all its masters
 recursive_exec() {
+  set +e
+  local rv
   if [ "$MASTER" ]; then
     ssh "$MASTER_USER" "synccluster recursive_exec" "$@"
+    rv="$?"
   fi
-  "$@"
+  if [ "$rv" -eq 0 ]; then
+    "$@"
+    rv="$?"
+  fi
+  set -e
+  return rv;
 }
 
 user_add() {
