@@ -26,9 +26,12 @@ SOFTWARE.
 
 LICENSE
 
-SCRIPT="$(readlink -fs "$0")"
+SYNCCLUSTER_VERSION="10000" # major * 10000 + minor
+SELF="$0"
+SCRIPT="$(readlink -fs "$SELF")"
 SCRIPTNAME="$(basename "$SCRIPT")"
-[ "$FLOCKER" != "$SCRIPT" ] && exec env FLOCKER="$SCRIPT" flock -e -w 1 "$SCRIPT" "$0" "$@" || :
+ARGS=("$@")
+[ "$FLOCKER" != "$SCRIPT" ] && exec env FLOCKER="$SCRIPT" flock -e -w 1 "$SCRIPT" "$SELF" "${ARGS[@]}" || :
 
 set -e
 
@@ -121,6 +124,31 @@ export cygwin_install_command="setup-x86_64.exe -D -R $cygwin_install_dir -s $cy
 [ "$(uname -o)" = "Cygwin" ] && cygwin=1 || cygwin=""
 
 lock=/var/lock/synccluster
+
+version() {
+  echo "$SYNCCLUSTER_VERSION"
+}
+
+update_from_master() {
+  [ "$MASTER" ] || return
+  local remote_version="$(master_exec version)"
+  if [ "$remote_version" ] && [ "$remote_version" -ne "$(version)" ]; then
+    if [ -w "$SCRIPT" ]; then
+      local tmpfile="$(mktemp)"
+      trap "rm -f '$tmpfile'" EXIT
+      master_exec 'cat "$(which synccluster)"' > "$tmpfile"
+      mv "$tmpfile" "$SCRIPT"
+      trap EXIT
+      if [ "${ARGS[0]}" != "update_from_master" ]; then
+        # We were in an implicit call, restart the command with the updated script
+        "$SCRIPT" "${ARGS[@]}"
+        exit $?
+      fi
+    else
+      echo "Warning: the local script does not have the same version as the master" >&2
+    fi
+  fi
+}
 
 require_domain() {
   [ "$DOMAIN" ] || DOMAIN="$1"
@@ -695,7 +723,7 @@ shell() {
 enter_chroot() {
     target="$1"
     shift || true
-    cp "$0" "$target/synccluster"
+    cp "$SELF" "$target/synccluster"
     chmod a+x "$target/synccluster"
     trap "umount -l '$target/proc';umount -l '$target/sys';umount -l '$target/dev'" EXIT
     mount --rbind "/proc" "$target/proc"
@@ -715,7 +743,7 @@ if [ "${1%%=*}" = "--chroot" ]; then
   fi
 
   chroot_setup "$target"
-  enter_chroot "$target" /bin/bash /synccluster "$@"
+  enter_chroot "$target" /bin/bash /synccluster "${ARGS[@]}"
 fi
 
 add_apt_sources() {
@@ -1436,7 +1464,7 @@ cp "$gshadowfile" "$gshadownewfile"
 
 install_synccluster() {
   dir "/usr/local/bin"
-  cp "$0" /usr/local/bin/synccluster &>/dev/null || true
+  cp "$SELF" /usr/local/bin/synccluster &>/dev/null || true
   chmod 755 /usr/local/bin/synccluster
 }
 
@@ -1570,6 +1598,7 @@ trap EXIT
 }
 
 sync() {
+  update_from_master
   quick_sync
   case "$ROLE" in
     slave)
@@ -2004,6 +2033,10 @@ $SCRIPTNAME recursive_exec <command...>
     Executes a command on all masters and on this host, recursively.
     The commands are executed on the topmost master first, then down to this host in the tree.
     Note that other clients and slaves are not impacted, since they are not known by their masters.
+
+$SCRIPTNAME update_from_master
+    Updates the local script to the version present on the master server.
+    Automatically called on each full data sync.
 
 $SCRIPTNAME info
     Show information about the current machine.
