@@ -1037,10 +1037,15 @@ snapshot() {
   done
 }
 
-move_data() {
+create_data_volume() {
   local mass="$1"
   local name="$2"
-  local path="$(readlink -fs "$3")"
+  local path
+  if [ "$3" ]; then
+    path="$(readlink -fs "$3")"
+  else
+    path=""
+  fi
   local mountpoint="$DATADIR/$name"
 
   if [ -e "$mountpoint" ]; then
@@ -1061,9 +1066,13 @@ move_data() {
   echo "$fstab" >> "$tmpdir/fstab"
   echo "$fstab" >> /etc/fstab
 
-  rsync -aP "$path/" "$tmpdir/$name/"
-  rm -r "$path"
-  [ "${mountpoint%/}" = "${path%/}" ] || ln -s "$mountpoint" "$path"
+  # Move existing path to the new volume
+  if [ "$path" ]; then
+    rsync -aP "$path/" "$tmpdir/$name/"
+    rm -r "$path"
+    [ "${mountpoint%/}" = "${path%/}" ] || ln -s "$mountpoint" "$path"
+  fi
+
   mkdir -p "$mountpoint"
   mount "$mountpoint"
 
@@ -1965,8 +1974,10 @@ $SCRIPTNAME create_data_drive <name> <device>
     Format a data drive with the correct filesystem and label.
     Warning: all data on this drive is wiped.
 
-$SCRIPTNAME move_data <drive> <volume> <path>
-    Move data in <path> to a volume created on the specified drive.
+$SCRIPTNAME create_data_volume <drive> <volume> [<path>]
+    Create a volume on the specified drive.
+    If <path> is set, move data from <path> to the new volume and create a symlink to it.
+    Data move is not atomic, ensure that nobody can access it during the operation.
 
 $SCRIPTNAME remove_data_volume <drive> <volume>
     Remove a volume from a drive.
