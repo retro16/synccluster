@@ -1061,7 +1061,15 @@ create_data_volume() {
   trap "umount -l '$tmpdir'; rmdir '$tmpdir'" EXIT
   
   mount -o subvol=/ "/dev/disk/by-label/$label" "$tmpdir"
-  btrfs subvolume create "$tmpdir/$name"
+  if grep -E "^LABEL=$label .*subvol=$name[, ]" "$tmpdir/fstab" &>/dev/null; then
+    # Already exists
+    echo "Data volume $name already declared in $mass"
+    exit 1
+  fi
+  if ! [ -e "$tmpdir/$name" ]; then
+    # The volume does not exist at all
+    btrfs subvolume create "$tmpdir/$name"
+  fi
   local fstab="LABEL=$label $mountpoint btrfs subvol=$name 0 0"
   echo "$fstab" >> "$tmpdir/fstab"
   echo "$fstab" >> /etc/fstab
@@ -1103,6 +1111,48 @@ create_data_drive() {
   local label="${DOMAIN}=$name"
 
   mkfs.btrfs -f -L "$label" "$device"
+}
+
+unmount_data_volume() {
+  local drive="$1"
+  local name="$2"
+  
+  require_root
+  require_domain
+
+  local device="${DOMAIN}=$drive"
+  local realdevice="$(readlink -fs "/dev/disk/by-label/$device")"
+
+  if ! [ "$name" ] || ! [ "$drive" ]; then
+    help
+  fi
+
+  fstabline="$(grep -E "^LABEL=$device .*[, ]subvol=$name[, ]" /etc/fstab)"
+
+  if ! [ "$fstabline" ]; then
+    echo "Subvolume $name could not be found in drive $drive. Aborting."
+    exit 1
+  fi
+
+  echo "The subvolume $name of the drive $drive ($realdevice) will be unmounted and undeclared. Continue ? (yes/NO)"
+  
+  read answer
+  if [ "$answer" != "yes" ]; then
+    echo "Aborted."
+    exit 1
+  fi
+
+  # Remove the entry in /etc/fstab
+  read d mountpoint other <<< "$fstabline"
+  grep -v -E "^LABEL=$device .*$mountpoint .*subvol=$name[, ]" /etc/fstab > /etc/fstab_ || true
+  mv /etc/fstab_ /etc/fstab
+
+  # Unmount the mount point
+  umount -l "$mountpoint"
+
+  umount -l "$tmpdir"
+  rmdir "$tmpdir"
+  trap EXIT
 }
 
 remove_data_volume() {
@@ -1978,6 +2028,9 @@ $SCRIPTNAME create_data_volume <drive> <volume> [<path>]
     Create a volume on the specified drive.
     If <path> is set, move data from <path> to the new volume and create a symlink to it.
     Data move is not atomic, ensure that nobody can access it during the operation.
+
+$SCRIPTNAME unmount_data_volume <drive> <volume>
+    Unmount and uninstall a volume. Data will be kept on the drive and can be reinstalled with install_drives.
 
 $SCRIPTNAME remove_data_volume <drive> <volume>
     Remove a volume from a drive.
