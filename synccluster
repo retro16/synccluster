@@ -1,5 +1,6 @@
 #!/bin/bash
 
+###############################################################################
 <<LICENSE
 
 The MIT License (MIT)
@@ -25,6 +26,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 LICENSE
+###############################################################################
 
 SYNCCLUSTER_VERSION="10000" # major * 10000 + minor
 SELF="$0"

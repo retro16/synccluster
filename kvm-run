@@ -1,0 +1,293 @@
+#!/bin/bash
+
+###############################################################################
+<<LICENSE
+
+The MIT License (MIT)
+
+Copyright (c) 2016 Jean-Matthieu COULON
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+LICENSE
+###############################################################################
+
+
+NAME="$1"; shift
+GPUDEV=( )
+USBDEV=( )
+OVMFFIRMWARE="./firmware/OVMF.fd"
+OVMFVARS="./vm/$NAME/OVMF.fd"
+HARDDISK=( "./vm/$NAME/sda.qcow2" )
+FILESIZE="40G"
+RAMSIZE="4G"
+CORES=2
+THREADS=1
+
+cd "$(dirname "$(readlink -fs "$0")")"
+
+if [ "$1" = "-h" ] || [ "$1" = "-help" ]; then
+cat <<EOF
+kvm-run [-f] machine-name [iso...]
+
+Run a KVM machine
+EOF
+exit 0
+fi
+
+if [ "$1" = "-f" ]; then
+  shift
+  FAILSAFE=1
+fi
+
+if [ -e "./vm/$NAME/kvm-run.rc" ]; then
+  echo "Loading settings ..."
+  . "./vm/$NAME/kvm-run.rc"
+fi
+
+if [ "$FAILSAFE" ]; then
+  GPUDEV=( )
+  USBCTRL=( )
+fi
+
+if ! [ -e "./vm/$NAME" ]; then
+  echo "Virtual machine $NAME does not exist. Create it ? (yes/NO)"
+  read answer
+  if [ "$answer" != "yes" ]; then
+    exit 0
+  fi
+  mkdir "./vm/$NAME"
+  if ! [ -e "$OVMFFIRMWARE" ]; then
+    echo "OVMF firmware missing. Please download it and put it in $PWD/$OVMFFIRMWARE"
+    exit 1
+  fi
+  cat > "./vm/$NAME/kvm-run.rc" <<-EOF
+  GPUDEV=( )
+  USBDEV=( )
+  OVMFFIRMWARE='$OVMFFIRMWARE'
+  OVMFVARS='./vm/$NAME/OVMF.fd'
+  HARDDISK=( '$HARDDISK' )
+  FILESIZE='$FILESIZE'
+  RAMSIZE='$RAMSIZE'
+  CORES=$CORES
+  THREADS=$THREADS
+  EOF
+fi
+
+# load vfio-pci module
+modprobe vfio-pci
+
+devlist=( )
+if [ "$GPUDEV" ]; then
+  for dev in "${GPUDEV[@]}"; do
+    devlist=( "${devlist[@]}" "0000:$dev.0" "0000:$dev.1" )
+  done
+fi
+if [ "$USBDEV" ]; then
+  for dev in "${USBDEV[@]}"; do
+    devlist=( "${devlist[@]}" "0000:$dev.0" )
+  done
+fi
+
+previousdriver=( )
+
+for dev in "${devlist[@]}"; do
+  vendor=$(cat /sys/bus/pci/devices/$dev/vendor)
+  device=$(cat /sys/bus/pci/devices/$dev/device)
+  if [ -e /sys/bus/pci/devices/$dev/driver ]; then
+    driver="$(basename "$(readlink -fs "/sys/bus/pci/devices/$dev/driver/module" )")"
+    if [ "$driver" = "vfio-pci" ] || [ "$driver" = "vfio_pci" ]; then
+      echo "Device $dev already bound to vfio-pci"
+      continue
+    fi
+    previousdriver=( "${previousdriver[@]}" "$dev/$driver" )
+    echo "Unbinding $dev from driver $driver"
+    echo $dev > /sys/bus/pci/devices/$dev/driver/unbind
+  else
+    echo "$dev was not bound to any driver"
+    previousdriver=( "${previousdriver[@]}" "$dev/(none)" )
+  fi
+  echo "Binding $dev [$vendor:$device] to vfio-pci"
+  echo $vendor $device > /sys/bus/pci/drivers/vfio-pci/new_id
+done
+
+# create installation file if not exist
+if [ ! -e "$HARDDISK" ]; then
+    qemu-img create -f qcow2 $HARDDISK $FILESIZE
+fi
+
+# create OVMF writable image if necessary
+if [ ! -e "$OVMFVARS" ]; then
+    cp "$OVMFFIRMWARE" "$OVMFVARS"
+fi
+
+
+# QEMU name and PID
+OPTS="-name $NAME"
+OPTS="$OPTS -pidfile /tmp/$NAME.pid"
+
+
+# Processor
+OPTS="$OPTS -cpu host,kvm=off"
+OPTS="$OPTS -smp $(($CORES * $THREADS)),sockets=1,cores=$CORES,threads=$THREADS"
+OPTS="$OPTS -enable-kvm"
+
+
+# Machine
+OPTS="$OPTS -machine type=pc-i440fx-2.1,accel=kvm"
+#OPTS="$OPTS -machine type=q35,accel=kvm"
+
+
+# The following setting enables S3 (suspend to RAM). OVMF supports S3
+# suspend/resume. Disable when using Q35
+OPTS="$OPTS -global PIIX4_PM.disable_s3=0"
+
+
+# Memory
+OPTS="$OPTS -m $RAMSIZE"
+#OPTS="$OPTS -mem-path /dev/hugepages"
+OPTS="$OPTS -mem-prealloc"
+OPTS="$OPTS -balloon none"
+
+
+# Hardware clock
+OPTS="$OPTS -rtc clock=host,base=utc"
+
+
+# Graphic card passthrough
+for dev in "${GPUDEV[@]}"; do
+  OPTS="$OPTS -device vfio-pci,host=$dev.0,multifunction=on"
+  OPTS="$OPTS -device vfio-pci,host=$dev.1"
+done
+
+
+# USB controllers passthrough
+for dev in "${USBDEV[@]}"; do
+  OPTS="$OPTS -device vfio-pci,host=$dev.0,multifunction=on"
+done
+
+
+# Boot priority
+OPTS="$OPTS -boot order=c"
+
+
+# OVMF
+OPTS="$OPTS -pflash $OVMFVARS"
+
+
+
+bootindex=1
+hdaddr=7
+
+# System drive
+for dev in "${HARDDISK[@]}"; do
+  OPTS="$OPTS -drive file=$dev,if=none,id=disk$hdaddr,format=qcow2,cache=unsafe"
+  OPTS="$OPTS -device virtio-blk-pci,scsi=off,addr=$hdaddr,drive=disk$hdaddr,id=virtio-disk$hdaddr,bootindex=$bootindex"
+  bootindex=$((bootindex+1))
+  hdaddr=$((hdaddr+1))
+done
+
+bus=0
+
+# CD-ROM images
+for cdrom; do
+  OPTS="$OPTS -drive id=cd$bus,if=none,format=raw,readonly,file=$cdrom"
+  OPTS="$OPTS -device driver=ide-cd,bus=ide.$bus,drive=cd$bus,bootindex=$bootindex"
+  bootindex=$((bootindex+1))
+  bus=$((bus+1))
+done
+
+
+# OVMF emits a number of info / debug messages to the QEMU debug console, at
+# ioport 0x402. We configure qemu so that the debug console is indeed
+# available at that ioport. We redirect the host side of the debug console to
+# a file.
+OPTS="$OPTS -global isa-debugcon.iobase=0x402 -debugcon file:/tmp/$NAME.ovmf.log"
+
+
+# Network
+#OPTS="$OPTS -netdev tap,vhost=on,ifname=$VM,script=/usr/local/bin/vm_ifup_brlan,id=brlan"
+#OPTS="$OPTS -device virtio-net-pci,mac=52:54:00:BA:BC:AA,netdev=brlan"
+
+
+# Display options
+if [ "$GPUDEV" ]; then
+  OPTS="$OPTS -vga none"
+  OPTS="$OPTS -monitor stdio"
+  OPTS="$OPTS -display none"
+else
+  OPTS="$OPTS -vga qxl"
+  # A USB tablet device in the guest allows for accurate pointer tracking
+  # between the host and the guest.
+  OPTS="$OPTS -device piix3-usb-uhci -device usb-tablet"
+fi
+
+#OPTS="$OPTS -monitor none"
+OPTS="$OPTS -serial null"
+OPTS="$OPTS -parallel null"
+
+#OPTS="$OPTS -daemonize"
+
+
+# QEMU Guest Agent
+#OPTS="$OPTS -chardev socket,path=/tmp/qga.sock,server,nowait,id=qga0"
+#OPTS="$OPTS -device virtio-serial"
+#OPTS="$OPTS -device virtserialport,chardev=qga0,name=org.qemu.guest_agent.0"
+
+
+echo qemu-system-x86_64 $OPTS
+qemu-system-x86_64 $OPTS
+
+# Restore driver bindings
+for p in "${previousdriver[@]}"; do
+  dev="${p%/*}"
+  driver="${p##*/}"
+
+  if [ "$driver" = "vfio-pci" ] || [ "$driver" = "vfio_pci" ]; then
+    continue
+  fi
+
+  vendor=$(cat /sys/bus/pci/devices/$dev/vendor)
+  device=$(cat /sys/bus/pci/devices/$dev/device)
+  if [ -e /sys/bus/pci/devices/$dev/driver ]; then
+    echo "Unbinding $dev from driver $(basename "$(readlink -fs "/sys/bus/pci/devices/$dev/driver/module" )")"
+    echo $dev > /sys/bus/pci/devices/$dev/driver/unbind
+  else
+    echo "$dev is not bound anymore"
+  fi
+  if [ "$driver" != "(none)" ]; then
+    echo "Binding $dev [$vendor:$device] back to $driver"
+    if [ -e "/sys/bus/pci/drivers/$driver" ]; then
+      echo $vendor $device > /sys/bus/pci/drivers/$driver/new_id
+    else
+      driver="$(tr '_' '-' <<< "$driver")"
+      if [ -e "/sys/bus/pci/drivers/$driver" ]; then
+        echo $vendor $device > /sys/bus/pci/drivers/$driver/new_id
+      else
+        driver="$(tr '-' '_' <<< "$driver")"
+        if [ -e "/sys/bus/pci/drivers/$driver" ]; then
+          echo $vendor $device > /sys/bus/pci/drivers/$driver/new_id
+        else
+          echo "Could not bind device $dev [$vendor:$device] back to driver $driver: driver path not found."
+        fi
+      fi
+    fi
+  fi
+done
+
