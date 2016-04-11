@@ -1475,6 +1475,7 @@ grep -E ":x:100[0-9][0-9]:" "$groupfile" | while IFS=':' read group pass gid mem
 done
 
 grep -E ":x:100[0-9][0-9]:" "$passwdfile" | while IFS=':' read user pass uid gid name homedir shell; do
+  if [ "$ROLE" != standby ] && [ "$ROLE" != roaming ]; the 
   # Add user if missing
   if ! grep -E "^$user:" "$passwdnewfile" &>/dev/null; then
     grep -E "^$user:" "$passwdfile" >> "$passwdnewfile"
@@ -1489,19 +1490,21 @@ grep -E ":x:100[0-9][0-9]:" "$passwdfile" | while IFS=':' read user pass uid gid
     fi
   fi
 
-  # Update unison profile
-  if [ "$UNISON" ]; then
+  if grep -E "^$user:" "$passwdnewfile" &>/dev/null; then
+    # Update unison profile
+    if [ "$UNISON" ]; then
     cat > "$UNISON/$user.prf" << EOF
 include _common
 root = /home/$user
 root = ssh://$MASTER_USER/$homedir
 EOF
-  fi
+    fi
 
-  # Update password
-  grep -vE "^$user:" "$shadownewfile" > "$shadownewfile."
-  grep -E "^$user:" "$shadowfile" >> "$shadownewfile."
-  mv "$shadownewfile." "$shadownewfile"
+    # Update password
+    grep -vE "^$user:" "$shadownewfile" > "$shadownewfile."
+    grep -E "^$user:" "$shadowfile" >> "$shadownewfile."
+    mv "$shadownewfile." "$shadownewfile"
+  fi
 
   echo "$user"
 done
