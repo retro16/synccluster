@@ -965,7 +965,7 @@ MASTER_USER="${1%%:*}"
 upload_ssh_key
 
 # Setup synchronization task
-cat >> /etc/cron.d/"$host" <<EOF
+cat >> /etc/cron.d/"${SCRIPTNAME}_$host" <<EOF
 05 3 * * * root rsync -a --delete '$1/' '$BACKUPDIR/$host/fs/$path/'
 EOF
 mkdir -p "$BACKUPDIR/$host/fs/$path/"
@@ -990,7 +990,7 @@ MASTER_USER="${1%%:*}"
 upload_ssh_key
 
 # Setup synchronization task
-cat >> /etc/cron.d/"$host" <<EOF
+cat >> /etc/cron.d/"${SCRIPTNAME}_$host" <<EOF
 05 3 * * * root synccluster backup '$1' '$BACKUPDIR/$host'
 EOF
 mkdir -p "$BACKUPDIR/$host/fs/$path/"
@@ -1090,6 +1090,133 @@ create_data_volume() {
   rmdir "$tmpdir"
 
   trap EXIT
+}
+
+data_volume_backup() {
+  local name="$1"
+  local targetname="$2"
+  local target="$3"
+  local targetmass="$4"
+  local mountpoint="$DATADIR/$name"
+  local targetmountpoint
+  local rsynctarget
+  local host
+
+  # Quick sanity check
+  if ! mountpoint -q "$mountpoint"; then
+    echo "$mountpoint not mounted, aborting"
+    exit 1
+  fi
+
+  if [ "$target" ]; then
+    host="${target#*@}"
+
+    # Setup SSH key
+    local oldmaster="$MASTER"
+    local oldmaster_user="$MASTER_USER"
+    MASTER="$host"
+    MASTER_USER="$target"
+    upload_ssh_key
+    fetch_master_conf
+
+    targetmountpoint="$M_DATADIR/$targetname"
+
+    # Check that the remote server has the volume
+    if ! master_exec mountpoint -q "$targetmountpoint"; then
+      if [ "$targetmass" ]; then
+        if ! master_exec create_data_volume "$targetmass" "$targetname"; then
+          echo "Could not create volume $targetname on drive $targetmass on host $MASTER_USER"
+          exit 1
+        fi
+      else
+        echo "$targetmountpoint not mounted on $target, aborting"
+        exit 1
+      fi
+    fi
+
+    rsynctarget="$target:$targetmountpoint"
+  else
+    host="localhost"
+    targetmountpoint="$DATADIR/$targetname"
+    rsynctarget="$targetmountpoint"
+
+    # Quick sanity check
+    if ! mountpoint -q "$targetmountpoint"; then
+      echo "$targetmountpoint not mounted, aborting"
+      exit 1
+    fi
+  fi
+
+  # Setup synchronization task
+  cat >> /etc/cron.d/"${SCRIPTNAME}_$host" <<EOF
+00 3 * * * root rsync -a --delete '$mountpoint/' '$rsynctarget/'
+EOF
+  
+  # Restore MASTER variables
+  MASTER="$oldmaster"
+  MASTER_USER="$oldmaster_user"
+  
+  echo "External backup successfully set up"
+}
+
+unison_data_volume() {
+  local name="$1"
+  local targetname="$2"
+  local target="$3"
+  local targetmass="$4"
+  local mountpoint="$DATADIR/$name"
+  local targetmountpoint
+  local rsynctarget
+  local host
+
+  # Quick sanity check
+  if ! mountpoint -q "$mountpoint"; then
+    echo "$mountpoint not mounted, aborting"
+    exit 1
+  fi
+
+  host="${target#*@}"
+
+  # Setup SSH key
+  local oldmaster="$MASTER"
+  local oldmaster_user="$MASTER_USER"
+  MASTER="$host"
+  MASTER_USER="$target"
+  upload_ssh_key
+  fetch_master_conf
+
+  targetmountpoint="$M_DATADIR/$targetname"
+
+  # Check that the remote server has the volume
+  if ! master_exec mountpoint -q "$targetmountpoint"; then
+    if [ "$targetmass" ]; then
+      if ! master_exec create_data_volume "$targetmass" "$targetname"; then
+        echo "Could not create volume $targetname on drive $targetmass on host $MASTER_USER"
+        exit 1
+      fi
+    else
+      echo "$targetmountpoint not mounted on $target, aborting"
+      exit 1
+    fi
+  fi
+
+  unisonname="volume_${name}_${host}_${targetname}"
+
+  # Create unison profile
+  cat > "$UNISON/$unisonname.prf" << EOF
+include _common
+root = $mountpoint
+root = ssh://$MASTER_USER/$targetmountpoint
+EOF
+
+  # Create cron task
+  cat >> /etc/cron.d/"${SCRIPTNAME}_$targethost" << EOF
+00 3 * * * root UNISON='$UNISON' unison '$unisonname'
+EOF
+
+  # Restore MASTER variables
+  MASTER="$oldmaster"
+  MASTER_USER="$oldmaster_user"
 }
 
 create_data_drive() {
@@ -2060,6 +2187,13 @@ $SCRIPTNAME periodic_backup <source>
 
 $SCRIPTNAME external_backup <source>
     Setup a periodic backup of a raw rsync path.
+
+$SCRIPTNAME data_volume_backup <localvolume> <backupvolume> [user@host] [targetmass]
+    Setup a cron job to backup a data volume to another. Uses rsync --delete.
+    If user@host is omitted, does a local copy.
+
+$SCRIPTNAME unison_data_volume <localvolume> <backupvolume> <user@host> [targetmass]
+    Setup a unison job to synchronize a data volume across
 
 $SCRIPTNAME user_add <username> <realname> <group>
     Add a new user. If executed from a slave or a client, creates the user on the master.
