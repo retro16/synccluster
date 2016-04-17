@@ -629,8 +629,8 @@ backup() {
   fi
 
   # Synchronize files
-  generate_backup_rsync_list > "$target/rsync_list"
-  rsync -aP --delete --delete-excluded --include-from="$target/rsync_list" "$src/" "$target/fs/"
+  generate_backup_rsync_list > "/tmp/rsync_list"
+  rsync -aP --delete --delete-excluded --include-from="/tmp/rsync_list" "$src/" "$target/fs/"
 
   # Backup the database
   pushd / &>/dev/null
