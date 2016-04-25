@@ -28,7 +28,7 @@ SOFTWARE.
 LICENSE
 ###############################################################################
 
-SYNCCLUSTER_VERSION="10002" # major * 10000 + minor
+SYNCCLUSTER_VERSION="10003" # major * 10000 + minor
 SELF="$0"
 SCRIPT="$(readlink -fs "$SELF")"
 SCRIPTNAME="$(basename "$SCRIPT")"
@@ -1850,6 +1850,7 @@ trap EXIT
 }
 
 sync() {
+  require_root
   update_from_master
   quick_sync
   case "$ROLE" in
@@ -1877,6 +1878,7 @@ sync() {
 }
 
 quick_sync() {
+  require_root
   case "$ROLE" in
     standby)
       user_sync
