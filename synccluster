@@ -28,7 +28,7 @@ SOFTWARE.
 LICENSE
 ###############################################################################
 
-SYNCCLUSTER_VERSION="10003" # major * 10000 + minor
+SYNCCLUSTER_VERSION="10004" # major * 10000 + minor
 SELF="$0"
 SCRIPT="$(readlink -fs "$SELF")"
 SCRIPTNAME="$(basename "$SCRIPT")"
@@ -139,7 +139,7 @@ update_from_master() {
     if [ -w "$SCRIPT" ]; then
       local tmpfile="$(mktemp)"
       trap "rm -f '$tmpfile'" EXIT
-      master_exec 'cat "$(which "$SCRIPTNAME")"' > "$tmpfile"
+      master_exec 'cat "$(which "'"$SCRIPTNAME"'")"' > "$tmpfile"
       mv "$tmpfile" "$SCRIPT"
       chmod 755 "$SCRIPT"
       trap EXIT
@@ -1750,9 +1750,13 @@ grep -E ":x:100[0-9][0-9]:" /etc/passwd | while IFS=':' read user pass uid gid n
   fi
 done
 
-# Synchronize crontabs
-dir /var/spool/cron/crontabs.master
-rsync -a "$MASTER_USER":/var/spool/cron/crontabs/ /var/spool/cron/crontabs.master/
+case "$ROLE" in
+  standby|secondary)
+    # Synchronize crontabs
+    dir /var/spool/cron/crontabs.master
+    rsync -a "$MASTER_USER":/var/spool/cron/crontabs/ /var/spool/cron/crontabs.master/
+    ;;
+esac
 
 rm -rf "$T"
 trap EXIT
