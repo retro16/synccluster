@@ -28,12 +28,12 @@ SOFTWARE.
 LICENSE
 ###############################################################################
 
-SYNCCLUSTER_VERSION="10000" # major * 10000 + minor
+SYNCCLUSTER_VERSION="10001" # major * 10000 + minor
 SELF="$0"
 SCRIPT="$(readlink -fs "$SELF")"
 SCRIPTNAME="$(basename "$SCRIPT")"
 ARGS=("$@")
-[ "$FLOCKER" != "$SCRIPT" ] && exec env FLOCKER="$SCRIPT" flock -e -w 1 "$SCRIPT" "$SELF" "${ARGS[@]}" || :
+[ "$FLOCKER" != "$SCRIPT" ] && exec env FLOCKER="$SCRIPT" flock -e -w 1 "$SCRIPT" "$SCRIPT" "${ARGS[@]}" || :
 
 set -e
 
@@ -63,7 +63,7 @@ KODIDIR='/home/.local/kodi'
 CLOUDDIR='/home/.local/cloud'
 WWWDIR='/var/www'
 BACKUPDIR='/home/.local/backup'
-MAILDIR='/home/.local/mail'
+MAILDIR='/var/mail'
 UNISON='/home/.local/unison'
 MIRROR='$MIRROR'
 DISTNAME='$DISTNAME'
@@ -166,7 +166,11 @@ require_mailrelay() {
 generate_synccluster_conf() {
   local synccluster="$1"; [ "$synccluster" ] || synccluster="/etc/default/synccluster"; shift || true
   require_domain
-  require_mailrelay
+  case "$ROLE" in
+    master|standby|secondary)
+      require_mailrelay
+      ;;
+  esac
   current_synccluster > "$synccluster"
   . "$synccluster"
 }
@@ -182,8 +186,10 @@ require_master_conf() {
 default_roundcube_conf() {
   require_password
   cat <<EOF
+<?php
 \$config = array();
-\$config['smtp_debug'] = true;
+\$config['language'] = 'fr_FR';
+\$config['smtp_debug'] = false;
 \$config['imap_debug'] = false;
 \$config['log_logins'] = false;
 \$config['log_session'] = false;
@@ -308,6 +314,13 @@ smtpd_use_tls = yes
 EOF
 }
 
+default_procmail_conf() {
+  cat <<EOF
+UMASK=007
+DEFAULT=\${EPREFIX}$MAILDIR/\$LOGNAME/Maildir/
+EOF
+}
+
 install_postfix() {
   require_packages postfix
   local target="$1"; [ "$target" ] || target="/etc/postfix"; shift || true
@@ -317,6 +330,7 @@ install_postfix() {
   require_mailrelay
   require_domain
   default_postfix_conf > "$target/main.cf"
+  default_procmail_conf > "/etc/procmailrc"
   echo "$DOMAIN" > /etc/mailname
   [ -d "$MAILDIR" ] || mkdir -p "$MAILDIR"
   chmod 1777 "$MAILDIR"
@@ -543,6 +557,7 @@ generate_backup_rsync_list() {
 + /home/[a-zA-Z0-9]*/.ssh/**
 + /home/[a-zA-Z0-9]*/.unison
 + /home/[a-zA-Z0-9]*/.unison/*.prf
++ /home/[a-zA-Z0-9]*/.procmailrc
 + /usr
 + /usr/local
 + /usr/local/**
@@ -689,22 +704,44 @@ Redirect 301 /.well-known/carddav /cloud/remote.php/carddav
 Redirect 301 /.well-known/caldav  /cloud/remote.php/caldav
 EOF
   ln -fs ../conf-available/owncloud-local.conf "$target"/conf-enabled/owncloud-local.conf
+
+  cat > "$target"/conf-available/transmission-local.conf <<EOF
+ifmodule mod_proxy.c>
+  ProxyRequests Off
+  <proxy *>
+    AddDefaultCharset off
+    Order Allow,Deny
+    Allow from all
+  </proxy>
+
+  ProxyPass /transmission http://localhost:9091/transmission
+  ProxyPassReverse /transmission http://localhost:9091/transmission
+  # Line below is optional
+  #Redirect permanent /transmission https://myserver.com/transmission/web/
+
+  ProxyVia On
+</ifmodule>
+EOF
+  ln -fs ../conf-available/transmission-local.conf "$target"/conf-enabled/transmission-local.conf
 }
 
 update_php_ini() {
   local target="$1"; [ "$target" ] || target=/etc/php5/apache2/php.ini; shift || true
-  sed -i 's/[ ;]*max_execution_time *= */max_execution_time = 600/' "$target"
-  sed -i 's/[ ;]*memory_limit *= */memory_limit = 256M/' "$target"
-  sed -i 's/[ ;]*post_max_size *= */post_max_size = 64M/' "$target"
-  sed -i 's/[ ;]*upload_max_filesize *= */upload_max_filesize = 2048M/' "$target"
-  sed -i 's/[ ;]*date.timezone *= */date.timezone = Europe\/Paris/' "$target"
-  sed -i 's/[ ;]*upload_max_filesize *= */upload_max_filesize = 2048M/' "$target"
+  sed -i 's/[ ;]*max_execution_time *= .*/max_execution_time = 600/' "$target"
+  sed -i 's/[ ;]*memory_limit *= .*/memory_limit = 256M/' "$target"
+  sed -i 's/[ ;]*post_max_size *= .*/post_max_size = 64M/' "$target"
+  sed -i 's/[ ;]*upload_max_filesize *= .*/upload_max_filesize = 2048M/' "$target"
+  sed -i 's/[ ;]*date.timezone *= .*/date.timezone = Europe\/Paris/' "$target"
+  sed -i 's/[ ;]*upload_max_filesize *= .*/upload_max_filesize = 2048M/' "$target"
 }
 
 dir() {
   [ -e "$1" ] || mkdir -p "$1"
 }
 
+shell() {
+  /bin/bash -i
+}
 
 chroot_setup() {
   TARGET="$1"
@@ -718,8 +755,15 @@ chroot_setup() {
   debootstrap "$DISTNAME" "$TARGET" "$MIRROR"
 }
 
-shell() {
-  /bin/bash -i
+fakechroot_setup() {
+  TARGET="$1"
+  shift || true
+  if [ -e "$TARGET/var/log/bootstrap.log" ]; then
+    return
+  fi
+  require_packages debootstrap fakechroot fakeroot
+
+  fakechroot fakeroot debootstrap "$DISTNAME" "$TARGET" "$MIRROR"
 }
 
 enter_chroot() {
@@ -734,6 +778,15 @@ enter_chroot() {
     chroot "$target" "$@"
     exit $?
 }
+
+enter_fakechroot() {
+    target="$1"
+    shift || true
+    cp "$SELF" "$target/synccluster"
+    chmod a+x "$target/synccluster"
+    fakechroot fakeroot chroot "$target" "$@"
+    exit $?
+}
  
 if [ "${1%%=*}" = "--chroot" ]; then
   target="${1#*=}"
@@ -746,6 +799,12 @@ if [ "${1%%=*}" = "--chroot" ]; then
 
   chroot_setup "$target"
   enter_chroot "$target" /bin/bash /synccluster "${ARGS[@]}"
+elif [ "${1%%=*}" = "--fakechroot" ]; then
+  target="${1#*=}"
+  shift || true
+
+  fakechroot_setup "$target"
+  enter_fakechroot "$target" /bin/bash /synccluster "${ARGS[@]}"
 fi
 
 add_apt_sources() {
@@ -760,7 +819,10 @@ EOF
 }
 
 require_packages() {
-  DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
+  if ! dpkg-query -W "$@" &>/dev/null; then
+    require_root
+    DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
+  fi
 }
 
 install_base_packages() {
@@ -774,14 +836,15 @@ require_packages \
   xz-utils \
   ssh \
   libnss-mdns \
-  avahi-daemon
+  avahi-daemon \
+  ntp
 }
 
 install_synccluster_client_sync() {
   cat > /etc/systemd/system/synccluster_client_sync.service <<EOF
 [Unit]
 Description=Refreshes client configuration from server
-After=network.target
+After=network-online.target
 
 [Service]
 Type=oneshot
@@ -802,11 +865,11 @@ install_upnpc() {
   cat > /etc/systemd/system/upnpc_refresh.service <<EOF
 [Unit]
 Description=Punches holes through NAT using UPnP
-After=network.target
+After=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/upnp_open 22 25 80 143 443 993
+ExecStart=/usr/bin/upnpc -r 22 tcp 25 tcp 80 tcp 143 tcp 443 tcp 993 tcp
 User=root
 Group=root
 
@@ -818,15 +881,14 @@ EOF
 Description=Periodically update UPnP redirections
 
 [Timer]
-OnBootSec=0min
-OnCalendar=*:0/30
+OnBootSec=2min
+OnCalendar=*:0/10
 Persistent=true
 
 [Install]
 WantedBy=timers.target
 EOF
   systemctl daemon-reload
-  systemctl enable upnpc_refresh.service
   systemctl enable upnpc_refresh.timer
 }
 
@@ -836,7 +898,7 @@ install_modem() {
     cat > /etc/systemd/system/update_modem.service <<EOF
 [Unit]
 Description=Refresh MODEM settings
-After=network.target
+After=network-online.target
 
 [Service]
 Type=oneshot
@@ -852,13 +914,16 @@ EOF
 Description=Periodically update MODEM settings
 
 [Timer]
-OnBootSec=0min
+OnBootSec=2min
 OnCalendar=daily
 Persistent=true
 
 [Install]
 WantedBy=timers.target
 EOF
+    systemctl daemon-reload
+    systemctl enable update_modem.timer
+
     cat > /usr/local/bin/update_modem <<'EOF'
 #!/bin/bash
 
@@ -883,6 +948,8 @@ wget -qO/dev/null --header="Content-Type: application/x-www-form-urlencoded" --p
 wget -qO/dev/null http://"$MODEM"/logout.html
 EOF
     chmod a+x /usr/local/bin/update_modem
+  else
+    echo "No LaBox MODEM found on IP $MODEM"
   fi
 }
 
@@ -900,6 +967,8 @@ if ! [ -d /etc/php5 ] || ! [ -d /etc/apache2 ]; then
     php5-pgsql
 fi
 generate_apache_conf
+a2enmod proxy
+a2enmod proxy_http
 update_php_ini
 }
 
@@ -1601,21 +1670,21 @@ cp /etc/gshadow "$T"/gshadow.new
 
 # Merge user files
 
-grep -E ":x:100[0-9][0-9]:" ""$T"/group" | while IFS=':' read group pass gid members; do
+grep -E ":x:100[0-9][0-9]:" "$T/group" | while IFS=':' read group pass gid members; do
   # Add group if missing
-  if ! grep -E "^$group:x:" ""$T"/group.new"; then
-    grep -E "^$group:x:" ""$T"/group" >> ""$T"/group.new"
+  if ! grep -E "^$group:x:" "$T/group.new"; then
+    grep -E "^$group:x:" "$T/group" >> "$T/group.new"
   fi
 done
 
-grep -E ":x:100[0-9][0-9]:" ""$T"/passwd" | while IFS=':' read user pass uid gid name homedir shell; do
+grep -E ":x:100[0-9][0-9]:" "$T/passwd" | while IFS=':' read user pass uid gid name homedir shell; do
   if [ "$ROLE" != secondary ] && [ "$ROLE" != roaming ]; then
     # Add user if missing
-    if ! grep -E "^$user:" ""$T"/passwd.new" &>/dev/null; then
-      grep -E "^$user:" ""$T"/passwd" >> ""$T"/passwd.new"
+    if ! grep -E "^$user:" "$T/passwd.new" &>/dev/null; then
+      grep -E "^$user:" "$T/passwd" >> "$T/passwd.new"
 
       # Add user to the same groups as local user
-      sed -i 's;\(.*:x:[0-9]*.*[:,]local.*\);\1,'"$user"';' ""$T"/group.new"
+      sed -i 's;\(.*:x:[0-9]*.*[:,]local.*\);\1,'"$user"';' "$T/group.new"
 
       # Create home directory from skeleton
       if ! [ -d "$homedir" ]; then
@@ -1624,7 +1693,7 @@ grep -E ":x:100[0-9][0-9]:" ""$T"/passwd" | while IFS=':' read user pass uid gid
       fi
     fi
 
-    if grep -E "^$user:" ""$T"/passwd.new" &>/dev/null; then
+    if grep -E "^$user:" "$T/passwd.new" &>/dev/null; then
       # Update unison profile
       if [ "$UNISON" ]; then
         cat > "$UNISON/$user.prf" << EOF
@@ -1637,28 +1706,28 @@ EOF
   fi
 
   # Update password
-  grep -vE "^$user:" ""$T"/shadow.new" > ""$T"/shadow.new."
-  grep -E "^$user:" ""$T"/shadow" >> ""$T"/shadow.new."
-  mv ""$T"/shadow.new." ""$T"/shadow.new"
+  grep -vE "^$user:" "$T/shadow.new" > "$T/shadow.new."
+  grep -E "^$user:" "$T/shadow" >> "$T/shadow.new."
+  mv "$T/shadow.new." "$T/shadow.new"
 
   echo "$user"
 done
 
 # Update sudoers
-if grep -E "^sudo:x:" &>/dev/null ""$T"/group.new"; then
-  grep -vE "^sudo:x:" ""$T"/group.new" > ""$T"/group.new."
-  sudoers="$(grep -E "^sudo:x:" ""$T"/group.new" | cut -d: -f1-3)"
-  cat ""$T"/group" | cut -d: -f4 | tr ',' '\n' | while read user; do
-    if grep -E "^$user:x:100[0-9][0-9]:" ""$T"/passwd.new"; then
+if grep -E "^sudo:x:" &>/dev/null "$T/group.new"; then
+  grep -vE "^sudo:x:" "$T/group.new" > "$T/group.new."
+  sudoers="$(grep -E "^sudo:x:" "$T/group.new" | cut -d: -f1-3):"
+  while read user; do
+    if grep -E "^$user:x:100[0-9][0-9]:" "$T/passwd.new"; then
       sudoers="$sudoers$user,"
       break
     fi
-  done
-  echo "${sudoers:0: -1}" >> ""$T"/group.new."
-  mv ""$T"/group.new." ""$T"/group.new"
+  done <<< "$(cat "$T/group" | cut -d: -f4 | tr ',' '\n')"
+  echo "${sudoers:0: -1}" >> "$T/group.new." # Remove trailing comma
+  mv "$T/group.new." "$T/group.new"
 fi
 
-cp ""$T"/gshadow" ""$T"/gshadow.new"
+cp "$T/gshadow" "$T/gshadow.new"
 
 # Update system files
 mv "$T/passwd.new" /etc/passwd
@@ -1826,7 +1895,7 @@ quick_sync() {
 install_nfs_server() {
   require_packages nfs-kernel-server
   cat > /etc/exports <<EOF
-/home 192.168.0.0/24(rw,sync,no_subtree_check,crossmnt,fsid=0)
+/home 192.168.0.0/24(rw,sync,no_subtree_check,no_root_squash,crossmnt,fsid=0)
 EOF
   exportfs -r
 }
@@ -1835,10 +1904,11 @@ install_nfs_client() {
   require_master "$1"
   require_packages nfs-common
   require_master_conf
-  grep -v nfs4 /etc/fstab > /tmp/fstab
+  grep -v ' nfs4 ' /etc/fstab > /tmp/fstab
   cat >> /tmp/fstab <<EOF
 $MASTER:/ /home nfs4 rw,rsize=131072,wsize=131072 0 0
 EOF
+  mv /tmp/fstab /etc/fstab
 }
 
 promote() {
