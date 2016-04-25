@@ -141,7 +141,7 @@ update_from_master() {
       trap "rm -f '$tmpfile'" EXIT
       master_exec 'cat "$(which "$SCRIPTNAME")"' > "$tmpfile"
       mv "$tmpfile" "$SCRIPT"
-      chmod a+x "$SCRIPT"
+      chmod 755 "$SCRIPT"
       trap EXIT
       if [ "${ARGS[0]}" != "update_from_master" ]; then
         # We were in an implicit call, restart the command with the updated script
