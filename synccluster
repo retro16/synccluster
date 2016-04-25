@@ -28,7 +28,7 @@ SOFTWARE.
 LICENSE
 ###############################################################################
 
-SYNCCLUSTER_VERSION="10001" # major * 10000 + minor
+SYNCCLUSTER_VERSION="10002" # major * 10000 + minor
 SELF="$0"
 SCRIPT="$(readlink -fs "$SELF")"
 SCRIPTNAME="$(basename "$SCRIPT")"
@@ -36,6 +36,7 @@ ARGS=("$@")
 [ "$FLOCKER" != "$SCRIPT" ] && exec env FLOCKER="$SCRIPT" flock -e -w 1 "$SCRIPT" "$SCRIPT" "${ARGS[@]}" || :
 
 set -e
+[ "$SYNCCLUSTER_DEBUG" ] && set -x
 
 unset ROLE
 unset MASTER
@@ -94,7 +95,7 @@ EOF
 MIRROR="$(grep -E '^deb [hft]*tp://.*debian.* main' /etc/apt/sources.list | head -n 1 | sed 's;deb \([^ ]*\) [a-z/]* main.*;\1;')"
 DISTNAME="$(grep -E '^deb [hft]*tp://.*debian.* main' /etc/apt/sources.list | head -n 1 | sed 's;deb [^ ]* \([a-z/]*\) main.*;\1;')"
 eval "$(default_synccluster)"
-[ -e "/etc/default/synccluster" ] && . /etc/default/synccluster
+[ -e "/etc/default/$SCRIPTNAME" ] && . /etc/default/$SCRIPTNAME
 
 export PASSWORD=''
 export ROLE
@@ -119,13 +120,13 @@ export roundcube_url="http://downloads.sourceforge.net/project/roundcubemail/rou
 export owncloud_url="https://download.owncloud.org/community/owncloud-${owncloud_version}.tar.bz2"
 export cygwin_url="https://cygwin.com/setup-x86_64.exe"
 export cygwin_mirror="http://mirror.switch.ch/ftp/mirror/cygwin"
-export cygwin_install_dir="C:\\cygwin_synccluster"
+export cygwin_install_dir="C:\\cygwin_$SCRIPTNAME"
 export cygwin_packages="bash,wget,rsync,unison"
 export cygwin_install_command="setup-x86_64.exe -D -R $cygwin_install_dir -s $cygwin_mirror -P $cygwin_packages -a x86_64 -q -B -l $cygwin_install_dir\\install -N -d"
 
 [ "$(uname -o)" = "Cygwin" ] && cygwin=1 || cygwin=""
 
-lock=/var/lock/synccluster
+lock="/var/lock/$SCRIPTNAME"
 
 version() {
   echo "$SYNCCLUSTER_VERSION"
@@ -134,11 +135,11 @@ version() {
 update_from_master() {
   [ "$MASTER" ] || return
   local remote_version="$(master_exec version)"
-  if [ "$remote_version" ] && [ "$remote_version" -ne "$(version)" ]; then
+  if [ "$remote_version" ] && [ "$remote_version" -gt "$(version)" ]; then
     if [ -w "$SCRIPT" ]; then
       local tmpfile="$(mktemp)"
       trap "rm -f '$tmpfile'" EXIT
-      master_exec 'cat "$(which synccluster)"' > "$tmpfile"
+      master_exec 'cat "$(which "$SCRIPTNAME")"' > "$tmpfile"
       mv "$tmpfile" "$SCRIPT"
       trap EXIT
       if [ "${ARGS[0]}" != "update_from_master" ]; then
@@ -149,6 +150,8 @@ update_from_master() {
     else
       echo "Warning: the local script does not have the same version as the master" >&2
     fi
+  elif [ "$remote_version" ] && [ "$remote_version" -gt "$(version)" ]; then
+    echo "Warning: master server $MASTER has an older version of $SCRIPTNAME"
   fi
 }
 
@@ -164,7 +167,7 @@ require_mailrelay() {
 }
 
 generate_synccluster_conf() {
-  local synccluster="$1"; [ "$synccluster" ] || synccluster="/etc/default/synccluster"; shift || true
+  local synccluster="$1"; [ "$synccluster" ] || synccluster="/etc/default/$SCRIPTNAME"; shift || true
   require_domain
   case "$ROLE" in
     master|standby|secondary)
@@ -177,7 +180,7 @@ generate_synccluster_conf() {
 
 require_master_conf() {
   if [ "$ROLE" != "master" ]; then
-    eval "$(ssh "$MASTER_USER" "cat /etc/default/synccluster" | sed 's;^;M_;')"
+    eval "$(ssh "$MASTER_USER" "cat /etc/default/$SCRIPTNAME" | sed 's;^;M_;')"
   else
     eval "$(current_synccluster | sed 's;^;M_;')"
   fi
@@ -446,7 +449,7 @@ restore_master() {
   fi
 
   local skip_setup_master=''
-  if grep "MASTER=''" /etc/default/synccluster &>/dev/null; then
+  if grep "MASTER=''" "/etc/default/$SCRIPTNAME" &>/dev/null; then
     skip_setup_master=1
   fi
 
@@ -458,7 +461,7 @@ restore_master() {
     upload_ssh_key
     fetch_master_conf
   else
-    fetch_backup_conf "$src/fs/etc/default/synccluster"
+    fetch_backup_conf "$src/fs/etc/default/$SCRIPTNAME"
   fi
 
   ROLE=master
@@ -743,6 +746,13 @@ shell() {
   /bin/bash -i
 }
 
+require_packages() {
+  if ! dpkg-query -W "$@" &>/dev/null; then
+    require_root
+    DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
+  fi
+}
+
 chroot_setup() {
   TARGET="$1"
   shift || true
@@ -763,28 +773,28 @@ fakechroot_setup() {
   fi
   require_packages debootstrap fakechroot fakeroot
 
-  fakechroot fakeroot debootstrap "$DISTNAME" "$TARGET" "$MIRROR"
+  fakechroot fakeroot debootstrap --variant=fakechroot "$DISTNAME" "$TARGET" "$MIRROR"
 }
 
 enter_chroot() {
     target="$1"
     shift || true
-    cp "$SELF" "$target/synccluster"
-    chmod a+x "$target/synccluster"
+    cp "$SELF" "$target/$SCRIPTNAME"
+    chmod a+x "$target/$SCRIPTNAME"
     trap "umount -l '$target/proc';umount -l '$target/sys';umount -l '$target/dev'" EXIT
     mount --rbind "/proc" "$target/proc"
     mount --rbind "/sys" "$target/sys"
     mount --rbind "/dev" "$target/dev"
-    chroot "$target" "$@"
+    chroot "$target" /bin/bash "/$SCRIPTNAME" "$@"
     exit $?
 }
 
 enter_fakechroot() {
     target="$1"
     shift || true
-    cp "$SELF" "$target/synccluster"
-    chmod a+x "$target/synccluster"
-    fakechroot fakeroot chroot "$target" "$@"
+    cp "$SELF" "$target/$SCRIPTNAME"
+    chmod a+x "$target/$SCRIPTNAME"
+    fakechroot fakeroot chroot "$target" /bin/bash "/$SCRIPTNAME" "$@"
     exit $?
 }
  
@@ -798,13 +808,13 @@ if [ "${1%%=*}" = "--chroot" ]; then
   fi
 
   chroot_setup "$target"
-  enter_chroot "$target" /bin/bash /synccluster "${ARGS[@]}"
+  enter_chroot "$target" "${ARGS[@]}"
 elif [ "${1%%=*}" = "--fakechroot" ]; then
   target="${1#*=}"
   shift || true
 
   fakechroot_setup "$target"
-  enter_fakechroot "$target" /bin/bash /synccluster "${ARGS[@]}"
+  enter_fakechroot "$target" "${ARGS[@]}"
 fi
 
 add_apt_sources() {
@@ -816,13 +826,6 @@ cat > /etc/apt/sources.list.d/contrib.list << EOF
 deb $MIRROR $DISTNAME contrib non-free
 deb-src $MIRROR $DISTNAME contrib non-free
 EOF
-}
-
-require_packages() {
-  if ! dpkg-query -W "$@" &>/dev/null; then
-    require_root
-    DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
-  fi
 }
 
 install_base_packages() {
@@ -1015,9 +1018,9 @@ ssh "$MASTER_USER" "echo SSH connection successfully established"
 }
 
 install_synccluster_cron() {
-cat > /etc/cron.d/synccluster <<EOF
-24 4 * * * root /usr/local/bin/synccluster sync
-*/20 * * * * root /usr/local/bin/synccluster quick_sync
+cat > "/etc/cron.d/$SCRIPTNAME" <<EOF
+24 4 * * * root /usr/local/bin/$SCRIPTNAME sync
+*/20 * * * * root /usr/local/bin/$SCRIPTNAME quick_sync
 EOF
 }
 
@@ -1060,7 +1063,7 @@ upload_ssh_key
 
 # Setup synchronization task
 cat >> /etc/cron.d/"${SCRIPTNAME}_$host" <<EOF
-05 3 * * * root synccluster backup '$1' '$BACKUPDIR/$host'
+05 3 * * * root /usr/local/bin/$SCRIPTNAME backup '$1' '$BACKUPDIR/$host'
 EOF
 mkdir -p "$BACKUPDIR/$host/fs/$path/"
 
@@ -1086,10 +1089,10 @@ generate_synccluster_conf
 fetch_master_conf() {
 local oldmaster="$MASTER"
 local oldmaster_user="$MASTER_USER"
-trap 'rm -f /tmp/synccluster' EXIT
-if rsync "$MASTER_USER":/etc/default/synccluster /tmp/synccluster; then
-  . /tmp/synccluster
-  rm /tmp/synccluster
+trap "rm -f /tmp/$SCRIPTNAME" EXIT
+if rsync "$MASTER_USER:/etc/default/$SCRIPTNAME" "/tmp/$SCRIPTNAME"; then
+  . "/tmp/$SCRIPTNAME"
+  rm "/tmp/$SCRIPTNAME"
 fi
 trap EXIT
 MASTER="$oldmaster"
@@ -1654,8 +1657,8 @@ sync
 
 install_synccluster() {
   dir "/usr/local/bin"
-  cp "$SELF" /usr/local/bin/synccluster &>/dev/null || true
-  chmod 755 /usr/local/bin/synccluster
+  cp "$SCRIPT" "/usr/local/bin/$SCRIPTNAME" &>/dev/null || true
+  chmod 755 "/usr/local/bin/$SCRIPTNAME"
 }
 
 user_sync() {
@@ -1948,7 +1951,7 @@ systemctl enable postfix
 systemctl restart postfix
 
 # Disable backup cron tasks
-rm /etc/cron.d/synccluster
+rm "/etc/cron.d/$SCRIPTNAME"
 
 # Remove backup profiles for unison
 for f in "$UNISON"/[a-zA-Z0-9]*.prf; do
@@ -2007,9 +2010,9 @@ EOF
 
   useradd -c "" -d "$KODIDIR" -p"${PASSWORD}kodi" -U kodi
 
-  grep 'synccluster configuration' /etc/lightdm/lightdm.conf &>/dev/null || mv /etc/lightdm/lightdm.conf /etc/lightdm/lightdm.conf.old 
+  grep "$SCRIPTNAME configuration" /etc/lightdm/lightdm.conf &>/dev/null || mv /etc/lightdm/lightdm.conf /etc/lightdm/lightdm.conf.old 
   cat > /etc/lightdm/lightdm.conf <<EOF
-# synccluster configuration
+# $SCRIPTNAME configuration
 [LightDM]
 start-default-seat=true
 seats=Seat:0
@@ -2031,7 +2034,7 @@ master_exec() {
   set +e
   local rv
   if [ "$MASTER" ]; then
-    ssh "$MASTER_USER" "synccluster master_exec" "$@"
+    ssh "$MASTER_USER" "$SCRIPTNAME master_exec" "$@"
     rv="$?"
   else
     "$@"
@@ -2046,7 +2049,7 @@ recursive_exec() {
   set +e
   local rv
   if [ "$MASTER" ]; then
-    ssh "$MASTER_USER" "synccluster recursive_exec" "$@"
+    ssh "$MASTER_USER" "$SCRIPTNAME recursive_exec" "$@"
     rv="$?"
   fi
   if [ "$rv" -eq 0 ]; then
@@ -2119,8 +2122,8 @@ group_del() {
 # Show info about the host
 info() {
 require_root
-if ! [ -e /etc/default/synccluster ]; then
-  echo "synccluster is not installed on this machine"
+if ! [ -e "/etc/default/$SCRIPTNAME" ]; then
+  echo "$SCRIPTNAME is not installed on this machine"
   exit 1
 fi
 require_domain
