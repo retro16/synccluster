@@ -35,8 +35,8 @@ SCRIPTNAME="$(basename "$SCRIPT")"
 ARGS=("$@")
 [ "$FLOCKER" != "$SCRIPT" ] && exec env FLOCKER="$SCRIPT" flock -e -w 1 "$SCRIPT" "$SCRIPT" "${ARGS[@]}" || :
 
-set -e
 [ "$SYNCCLUSTER_DEBUG" ] && set -x
+set -e
 
 unset ROLE
 unset MASTER
@@ -301,7 +301,6 @@ mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128
 myorigin = /etc/mailname
 readme_directory = no
 recipient_delimiter = +
-relayhost = $MAILRELAY
 smtp_tls_session_cache_database = btree:\${data_directory}/smtp_scache
 smtpd_banner = \$myhostname ESMTP \$mail_name (Debian/GNU)
 smtpd_relay_restrictions = permit_mynetworks permit_sasl_authenticated reject_unauth_destination
@@ -668,6 +667,16 @@ backup() {
 }
 
 
+autobackup() {
+  # Automatically backup data volumes to volumes named <volume>.backup
+  for f in "$DATADIR"/*; do
+    if mountpoint -q "$f" && mountpoint -q "$f.backup"; then
+      rsync -a --delete "$f/" "$f.backup/"
+    fi
+  done
+}
+
+
 generate_apache_conf() {
   local target="$1"; [ "$target" ] || target="/etc/apache2"; shift || true
   cat > "$target"/conf-available/roundcubemail-local.conf <<EOF
@@ -748,7 +757,7 @@ shell() {
 }
 
 require_packages() {
-  if ! dpkg-query -W "$@" &>/dev/null; then
+  if ! dpkg-query -s "$@" &>/dev/null; then
     require_root
     DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
   fi
@@ -1165,6 +1174,16 @@ create_data_volume() {
   trap EXIT
 }
 
+remote_data_volume() {
+  local name="$1"
+  require_master_conf
+  mkdir "$DATADIR/$name"
+  cat >> /etc/fstab <<EOF
+$MASTER_USER:$M_DATADIR/$name $DATADIR/$name  fuse.sshfs _netdev,users,idmap=user,IdentityFile=/root/.ssh/id_rsa,allow_other,reconnect 0 0
+EOF
+  mount "$DATADIR/$name"
+}
+
 data_volume_backup() {
   local name="$1"
   local targetname="$2"
@@ -1492,19 +1511,6 @@ setup_master() {
 
 unison_common_profile() {
 cat <<'EOF'
-path = Bureau
-path = Documents
-path = Images
-path = Modèles
-path = Musique
-path = Vidéos
-path = Jeux
-path = Logiciels
-path = .config
-path = .mozilla
-path = .vim
-path = .ssh
-
 batch = true
 times = true
 silent = true
@@ -1530,7 +1536,27 @@ ignore = Name .*.swp
 ignore = Name [Tt]humbs.db
 ignore = Name $RECYCLE.BIN
 ignore = Name Crash Reports
+ignore = Name .nvidia-settings-rc
+ignore = Name .dmrc
+ignore = Name .xscreensaver
+ignore = Name .*authority
+ignore = Name .xsession-errors*
+ignore = Name .Trash*
+ignore = Name .viminfo
+ignore = Name .lesshst
+ignore = Name .bash_history
+ignore = Name .bash_logout
+ignore = Name tmp
 ignore = Path Documents/HTC
+ignore = Path .local
+ignore = Path .adobe
+ignore = Path .audacity-data
+ignore = Path .cache
+ignore = Path .dbus
+ignore = Path .nv
+ignore = Path .wine
+ignore = Path .thumbnails
+ignore = Path .gstreamer-*
 EOF
 }
 
@@ -1599,9 +1625,6 @@ install_dovecot
 install_unison
 install_roundcube
 install_owncloud
-
-echo "Synchronize data with master"
-sync
 }
 
 setup_secondary() {
@@ -1651,9 +1674,6 @@ fetch_master_conf
 install_postfix
 install_dovecot
 install_unison
-
-echo "Synchronize data with master"
-sync
 }
 
 install_synccluster() {
@@ -2260,6 +2280,10 @@ $SCRIPTNAME install_kodi
 $SCRIPTNAME backup [source] [target]
     Backup a whole machine from source to target. source or target may be a remote path (root@host:/) but not both.
     By default, backup the local machine to the local backup directory.
+
+$SCRIPTNAME autobackup
+    Backup all data volumes to their backup volume automatically.
+    A backup data volume is simply a data volume named Volume.backup (.backup appended to its name).
 
 $SCRIPTNAME restore_master <source>
     Create a new master on this host and restore data from a backup. <source> must point at a directory created with the backup command.
