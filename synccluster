@@ -1177,7 +1177,11 @@ create_data_volume() {
 remote_data_volume() {
   local name="$1"
   require_master_conf
-  mkdir "$DATADIR/$name"
+  [ -d "$DATADIR/$name" ] || mkdir "$DATADIR/$name"
+  if [ "$(ls -a "$DATADIR/$name" | wc -l)" -gt 2 ]; then
+    echo "$DATADIR/$name already exists and not empty, aborting."
+    exit 1
+  fi
   cat >> /etc/fstab <<EOF
 $MASTER_USER:$M_DATADIR/$name $DATADIR/$name  fuse.sshfs _netdev,users,idmap=user,IdentityFile=/root/.ssh/id_rsa,allow_other,reconnect 0 0
 EOF
