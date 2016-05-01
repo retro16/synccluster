@@ -2036,6 +2036,9 @@ EOF
   chmod +x /usr/local/bin/kodi_session
 
   useradd -c "" -d "$KODIDIR" -p"${PASSWORD}kodi" -U kodi
+  mkdir -p "$KODIDIR"
+  echo "exec /usr/bin/kodi" > "$KODIDIR/.xsession"
+  chown -R kodi:kodi "$KODIDIR"
 
   grep "$SCRIPTNAME configuration" /etc/lightdm/lightdm.conf &>/dev/null || mv /etc/lightdm/lightdm.conf /etc/lightdm/lightdm.conf.old 
   cat > /etc/lightdm/lightdm.conf <<EOF
@@ -2054,6 +2057,8 @@ autologin-user-timeout=0
 enabled=true
 display-setup-script=/usr/local/bin/kodi_session
 EOF
+
+  systemctl restart lightdm
 }
 
 # Run a command on the master
