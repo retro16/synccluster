@@ -1193,7 +1193,7 @@ remote_data_volume_sync() {
   if [ "$MASTER_USER" ]; then
     require_domain
     grep -v ' fuse.sshfs ' /etc/fstab > /etc/fstab.new
-    ssh "$MASTER_USER" "grep ' fuse.sshfs ' /etc/fstab" >> /etc/fstab/new
+    ssh "$MASTER_USER" "grep ' fuse.sshfs ' /etc/fstab" >> /etc/fstab.new
     mv /etc/fstab.new /etc/fstab
   fi
 }
