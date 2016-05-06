@@ -2023,7 +2023,8 @@ setup_client() {
   install_owncloud_client
   install_nfs_client
   install_synccluster_client_sync
-  sync
+  echo "/usr/local/bin/$SCRIPTNAME sync" > /etc/rc.local
+  chmod +x /etc/rc.local
 }
 
 setup_roaming() {
@@ -2035,7 +2036,6 @@ setup_roaming() {
   upload_ssh_key
   install_owncloud_client
   install_synccluster_client_sync
-  sync
 }
 
 install_kodi() {
