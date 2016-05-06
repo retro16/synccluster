@@ -28,7 +28,7 @@ SOFTWARE.
 LICENSE
 ###############################################################################
 
-SYNCCLUSTER_VERSION="10005" # major * 10000 + minor
+SYNCCLUSTER_VERSION="10006" # major * 10000 + minor
 SELF="$0"
 SCRIPT="$(readlink -fs "$SELF")"
 SCRIPTNAME="$(basename "$SCRIPT")"
@@ -1112,6 +1112,7 @@ generate_synccluster_conf
 }
 
 snapshot() {
+  if ! which btrfs &>/dev/null; then return; fi
   name="synccluster-snapshot-$1-$(date +%Y-%m-%d_%H-%M-%S)"
   mount | grep -E -e '^[^ ]* on / type btrfs ' -e '^[^ ]* on /home type btrfs ' | while read device on target type fs options; do
     while [ -e "$target/$name" ]; do
@@ -1186,6 +1187,15 @@ remote_data_volume() {
 $MASTER_USER:$M_DATADIR/$name $DATADIR/$name  fuse.sshfs _netdev,users,idmap=user,IdentityFile=/root/.ssh/id_rsa,allow_other,reconnect 0 0
 EOF
   mount "$DATADIR/$name"
+}
+
+remote_data_volume_sync() {
+  if [ "$MASTER_USER" ]; then
+    require_domain
+    grep -v ' fuse.sshfs ' /etc/fstab > /etc/fstab.new
+    ssh "$MASTER_USER" "grep ' fuse.sshfs ' /etc/fstab" >> /etc/fstab/new
+    mv /etc/fstab.new /etc/fstab
+  fi
 }
 
 data_volume_backup() {
@@ -1899,6 +1909,7 @@ sync() {
       cert_sync
       ;;
     client)
+      remote_data_volume_sync
       ;;
     roaming)
       ;;
@@ -2007,6 +2018,7 @@ setup_client() {
   UNISON=
   ROLE=client
   generate_synccluster_conf
+  install_base_packages
   upload_ssh_key
   install_owncloud_client
   install_nfs_client
