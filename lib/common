@@ -44,33 +44,8 @@ require() {
   fi
 }
 
-# Postinstall script
-postinstall() {
-  echo "$SC installed"
-}
 
-
-# Main program
-if ! [ "$SCINSTALLED" ]; then
-  if [ "${ARGS[0]}" != "--install" ]; then
-    echo "$SC is not installed."
-    echo "Please install with the following command:"
-    echo "  # $SC --install"
-    exit 1
-  fi
-
-  # Install SC
-  install "$SCCURBIN" "$SCBIN"
-  rm -rf "$SCLIBDIR" || true
-  mkdir -p "$SCLIBDIR"
-  cp -r "$SCCURBINDIR/lib" "$SCLIBDIR"
-  chown -R root:root "$SCLIBDIR"
-  chmod -R u+rwX,g+rX,o+rX "$SCLIBDIR"
-
-  # Run post install script
-  postinstall
-fi
-
+### Main program ###
 
 # Command-line parsing
 if [ -z "${ARGS[0]}" ]; then
@@ -80,6 +55,26 @@ fi
 
 subcmd="${ARGS[0]}"
 ARGS=("${ARGS[@]:1}")
+
+if ! [ "$SCINSTALLED" ]; then
+  if [ "$subcmd" != "install" ]; then
+    echo "$SC is not installed."
+    echo "Please install with the following command:"
+    echo "  # $SC install"
+    exit 1
+  fi
+fi
+
+if [ "$subcmd" = "install" ]; then
+  if [ -r "$SCCURBINDIR/lib/commands/install" ]; then
+    source "$SCCURBINDIR/lib/commands/install"
+    install
+  else
+    echo "Error: Install module not found."
+    exit 1
+  fi
+  exit 0
+fi
 
 if [ -r "$SCCMDDIR/$subcmd" ]; then
   source "$SCCMDDIR/$subcmd"

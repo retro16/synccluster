@@ -1,0 +1,23 @@
+# Install script
+install() {
+  # Install SC
+  mkdir -p "$(dirname "$SCBIN")" || true
+  cp "$SCCURBIN" "$SCBIN"
+  chown root:root "$SCBIN"
+  chmod u+rwx,g+rx,o+rx "$SCBIN"
+
+  rm -rf "$SCLIBDIR" || true
+  mkdir -p "$SCLIBDIR"
+  cp -r "$SCCURBINDIR/lib" "$SCLIBDIR"
+  chown -R root:root "$SCLIBDIR"
+  chmod -R u+rwX,g+rX,o+rX "$SCLIBDIR"
+
+  # Run post install script
+  postinstall
+}
+
+# Postinstall script
+postinstall() {
+  echo "$SC installed"
+}
+

@@ -38,6 +38,7 @@ SCDEFDIR="$SCROOTDIR/etc/default/$SC"
 SCCURBIN="$(readlink -fs "$0")"
 SCCURBINNAME="$(basename "$SCCURBIN")"
 SCCURBINDIR="$(dirname "$SCCURBIN")"
+SCINSTALLED=""
 ARGS=("$@")
 
 set -e
@@ -56,8 +57,8 @@ if [ -r "$SCLIBDIR/common" ]; then
   source "$SCLIBDIR/common"
 else
   # Not installed
-  if [ -r "$(dirname "$(readlink -fs "$0")")/lib/common" ]; then
-    source "$(dirname "$(readlink -fs "$0")")/lib/common"
+  if [ -r "$SCCURBINDIR/lib/common" ]; then
+    source "$SCCURBINDIR/lib/common"
   else
     echo "$SC is not installed."
     echo "Error: lib directory not found"
