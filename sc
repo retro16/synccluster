@@ -1,5 +1,4 @@
 #!/bin/bash
-
 ###############################################################################
 <<LICENSE
 
@@ -60,9 +59,15 @@ ARGS=("$@")
 ### Main program ###
 
 # Command-line parsing
-if [ -z "${ARGS[0]}" ] || [ "${ARGS[@]}" = "--help" ]; then
+if [ -z "${ARGS[0]}" ] || [ "${ARGS[0]}" = "--help" ]; then
   echo "$SC usage:"
   echo "$SC subcommand [PARAMETERS]"
+  if [ -d "$SCCMDDIR" ]; then
+    echo "Available subcommands:"
+    for f in "$SCCMDDIR"/*; do
+      echo "$(basename "$f")"
+    done
+  fi
   exit 1
 fi
 
@@ -109,5 +114,4 @@ else
   echo "$subcmd: subcommand not found"
   exit 1
 fi
-
 
