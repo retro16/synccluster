@@ -1,0 +1,170 @@
+#!/bin/bash
+###############################################################################
+<<LICENSE
+
+The MIT License (MIT)
+
+Copyright (c) 2016 Jean-Matthieu COULON
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+LICENSE
+###############################################################################
+
+
+pullbackup_setup() {
+  require crontask
+  require settings
+  settings prompt SCBACKUP_ROOT "/home/.local/backup" "Enter the root path for remote backup:"
+  if ! [ -d "$SCBACKUP_ROOT" ]; then
+    echo "Invalid backup root path"
+    exit 2
+  fi
+  settings save
+  crontask add pullbackup
+}
+
+pullbackup_clean() {
+  require settings
+  unset SCBACKUP_ROOT
+  settings save
+}
+
+# Add a new path
+pullbackup_add() {
+  require settings
+  SCBACKUP_LIST="$SCBACKUP_LIST $1 "
+  settings save
+}
+
+# Remove a path
+pullbackup_remove() {
+  require settings
+  SCBACKUP_LIST="$(sed -e "s/ $1 //" <<< "$SCBACKUP_LIST")"
+}
+
+pullbackup_enabled() {
+  if [ -z "$SCBACKUP_ROOT" ] || ! [ -d "$SCBACKUP_ROOT" ] || [ -z "${SCBACKUP_LIST}" ]; then
+    return 1
+  fi
+  return 0
+}
+
+pullbackup_exclude_list() {
+  cat <<EOF
+- *.o
+- .*.swp
+- [cC]ache/
+- .[cC]ache/
+- [lL]ock
+- .parentlock
+- *.nps
+- *~
+- .*~
+- .[tT]rash*
+- [tT]humbs.db
+- \$RECYCLE.BIN
+- Crash Reports
+- /**/Documents/HTC/**
++ /etc
++ /etc/apt
++ /etc/apt/sources.list.d
++ /etc/apt/sources.list.d/**
++ /etc/aliases
++ /etc/mailname
++ /etc/cron.d
++ /etc/cron.d/**
++ $CLOUDDIR
++ $CLOUDDIR/**
++ $KODIDIR
++ $KODIDIR/**
++ $WWWDIR
++ $WWWDIR/**
++ $MAILDIR
++ $MAILDIR/**
++ $UNISON
++ $UNISON/**
++ /home
++ /home/[a-zA-Z0-9]*
++ /home/[a-zA-Z0-9]*/Bureau
++ /home/[a-zA-Z0-9]*/Bureau/**
++ /home/[a-zA-Z0-9]*/Documents
++ /home/[a-zA-Z0-9]*/Documents/**
++ /home/[a-zA-Z0-9]*/Images
++ /home/[a-zA-Z0-9]*/Images/**
++ /home/[a-zA-Z0-9]*/Modèles
++ /home/[a-zA-Z0-9]*/Modèles/**
++ /home/[a-zA-Z0-9]*/Musique
++ /home/[a-zA-Z0-9]*/Musique/**
++ /home/[a-zA-Z0-9]*/Vidéos
++ /home/[a-zA-Z0-9]*/Vidéos/**
++ /home/[a-zA-Z0-9]*/Jeux
++ /home/[a-zA-Z0-9]*/Jeux/**
++ /home/[a-zA-Z0-9]*/Logiciels
++ /home/[a-zA-Z0-9]*/Logiciels/**
++ /home/[a-zA-Z0-9]*/.config
++ /home/[a-zA-Z0-9]*/.config/**
++ /home/[a-zA-Z0-9]*/.mozilla
++ /home/[a-zA-Z0-9]*/.mozilla/**
++ /home/[a-zA-Z0-9]*/.vimrc
++ /home/[a-zA-Z0-9]*/.vim
++ /home/[a-zA-Z0-9]*/.vim/**
++ /home/[a-zA-Z0-9]*/.ssh
++ /home/[a-zA-Z0-9]*/.ssh/**
++ /home/[a-zA-Z0-9]*/.unison
++ /home/[a-zA-Z0-9]*/.unison/*.prf
++ /home/[a-zA-Z0-9]*/.procmailrc
++ /usr
++ /usr/local
++ /usr/local/**
++ /var
++ /var/spool
++ /var/spool/cron
++ /var/spool/cron/crontabs*
++ /var/spool/cron/crontabs*/*
++ /var/www
++ /var/www/*
++ /var/www/*/config
++ /var/www/*/config/**
++ /opt
++ /opt/**
+- *
+EOF
+}
+
+pullbackup_cron() {
+  require temp
+  local exclude="$(temp newfile)"
+  pullbackup exclude_list > "$exclude"
+  for s in $SCBACKUP_LIST; do
+    local target="$SCBACKUP_ROOT/$(tr ':' '/' <<< "$s")/fs"
+    [ -d "$target" ] || mkdir -p "$target"
+    rsync -azP --delete --delete-excluded --include-from="$exclude" "$s/" "$target/"
+  done
+  temp release
+}
+
+pullbackup_settings() {
+  echo SCBACKUP_ROOT
+  echo SCBACKUP_LIST
+}
+
+pullbackup() {
+  subcall pullbackup "$@"
+}

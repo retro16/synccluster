@@ -27,30 +27,106 @@ SOFTWARE.
 LICENSE
 ###############################################################################
 
-require master
 
 unisonsync_setup() {
-  syspackage unison unison
+  require settings
+  syspackage unison
+  settings UNISON "/var/lib/unison" "Enter the UNISON base directory:"
+  [ -d "$UNISON" ] || mkdir -p "$UNISON"
+  unisonsync common_profile > "$UNISON/_common.prf"
+  crontask add unisonsync hourly
+  settings save
+}
+
+unisonsync_clean() {
+  require settings
+  rm -rf "$UNISON"
+  unset UNISON
+  crontask remove unisonsync hourly
+  settings save
 }
 
 unisonsync_adduser() {
   local user="$1"; shift
   local homedir="$1"; shift
 
-  cat > "$SCUNISON/$user.prf" << EOF
+  cat > "$UNISON/hourly_$user.prf" << EOF
 include _common
 root = /home/$user
 root = ssh://$SCMASTER_USER/$homedir
 EOF
 }
 
+unisonsync_deluser() {
+  rm -f "$UNISON/hourly_$user.prf"
+}
+
 unisonsync_enabled() {
-  if has master && [ "$SCUNISON" ]; then
+  if has master && [ "$UNISON" ]; then
     return 0
   fi
   return 1
 }
 
+unisonsync_cron() {
+  local period="$1"; shift
+  for f in "$UNISON/$period"_*".prf"; do
+    unison "$(basename "$f" .prf)"
+  done
+}
+
+unisonsync_common_profile() {
+cat <<'EOF'
+batch = true
+times = true
+silent = true
+retry = 1
+addversionno = true
+sshargs = -C
+
+owner = true
+times = true
+
+prefer = newer
+
+ignore = Regex .*/\.?[cC]ache/.*
+ignore = Name [lL]ock
+ignore = Name .parentlock
+ignore = Name *.[lL]ock
+ignore = Name *.nps
+ignore = Name *.o
+ignore = Name *~
+ignore = Name .*~
+ignore = Name .[tT]rash*
+ignore = Name .*.swp
+ignore = Name [Tt]humbs.db
+ignore = Name $RECYCLE.BIN
+ignore = Name Crash Reports
+ignore = Name .nvidia-settings-rc
+ignore = Name .dmrc
+ignore = Name .xscreensaver
+ignore = Name .*authority
+ignore = Name .xsession-errors*
+ignore = Name .Trash*
+ignore = Name .viminfo
+ignore = Name .lesshst
+ignore = Name .bash_history
+ignore = Name .bash_logout
+ignore = Name tmp
+ignore = Path Documents/HTC
+ignore = Path .local
+ignore = Path .adobe
+ignore = Path .audacity-data
+ignore = Path .cache
+ignore = Path .dbus
+ignore = Path .nv
+ignore = Path .wine
+ignore = Path .thumbnails
+ignore = Path .gstreamer-*
+EOF
+}
+
 unisonsync() {
+  require master
   subcall unisonsync "$@"
 }

@@ -88,7 +88,14 @@ has() {
 # Check that command-lines are available, and if some are missing, install the corresponding system package
 syspackage() {
   local package="$1"; shift
-  for c in "$@"; do
+  local commands
+  if [ "$#" -gt 0 ]; then
+    commands=("$@")
+  else
+    commands=("$package")
+  fi
+
+  for c in "${commands[@]}"; do
     if ! which "$c" &>/dev/null; then
       apt install "$package"
       return $?

@@ -28,58 +28,23 @@ LICENSE
 ###############################################################################
 
 
-# List all settings
-settings_list() {
-  # Hardcoded settings
-  echo SCROOTDIR
-  echo SCPREFIX
-  echo SCLIBDIR
-  echo SCBIN
-  echo SCMDDIR
-  echo SCDEF
+crontask_add() {
+  local module="$1"; shift
+  local period="$1"; shift # period can be "hourly" "daily" "weekly" or "monthly".
 
-  # Modules settings
-  for m in $SCMODULES; do
-    if [ "$(type -t "${m}_settings")" = "function" ]; then
-      "${m}_settings"
-    fi
-  done
+  cat > /etc/cron."$period"/"$SC"_"$module" <<EOF
+#!/bin/sh
+flock -w 30 -E 1 '/etc/cron.$period/$SC_$module' $SC $module cron $period
+EOF
+  chmod +x /etc/cron."$period"/"$SC"_"$module"
 }
 
-# Print all settings with their values
-settings_print() {
-  for s in $(settings list); do
-    echo "$s='${!s}'"
-  done
+crontask_remove() {
+  local module="$1"; shift
+  local period="$1"; shift
+  rm /etc/cron."$period"/"$SC"_"$module"
 }
 
-# Save settings
-settings_save() {
-  local foreign_settings;
-  if [ "$SCSETTINGS" ]; then
-    if [ -r "$SCSETTINGS" ]; then
-      foreign_settings="$(grep -E -v -f <(settings list | sed -e 's/$/=/' -e 's/^/\^/') "$SCSETTINGS")"
-    fi
-    settings print > "$SCSETTINGS".new
-    echo "$foreign_settings" >> "$SCSETTINGS".new
-    mv "$SCSETTINGS".new "$SCSETTINGS"
-  fi
-}
-
-# Set a setting
-# Prompt the user for its value if unset
-# Do not change its value if set
-settings_prompt() {
-  local name="$1"; shift
-  local default="$1"; shift
-  local prompt="$1"; shift
-
-  if [ -z "${!name}" ]; then
-    read -r -p "$prompt" -i "$default" v;
-    declare -g "$name=$v"
-  fi
-}
-
-settings() {
-  subcall settings "$@"
+crontask() {
+  subcall crontask "$@"
 }

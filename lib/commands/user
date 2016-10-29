@@ -51,7 +51,7 @@ user_setup() {
 user_pull() {
   require master
   require temp
-  local T="$(temp newdir)"
+  local T="$(temp dir)"
 
 
   master getfile "/etc/{passwd,shadow,group,gshadow}" "$T"/
@@ -129,7 +129,9 @@ user_pull() {
   grep -E ":x:100[0-9][0-9]:" /etc/passwd | while IFS=':' read user pass uid gid name homedir shell; do
     if ! grep -E "^$user:" "$T"/passwd; then
       echo "User $user was removed. Home directory left untouched."
-      rm -f "$SCUNISON/$user.prf"
+      if has unisonsync; then
+        unison deluser "$user"
+      fi
       userdel "$user"
     fi
   done
@@ -138,7 +140,7 @@ user_pull() {
     standby|secondary)
       # Synchronize crontabs
       dir /var/spool/cron/crontabs.master
-      rsync -a "$MASTER_USER":/var/spool/cron/crontabs/ /var/spool/cron/crontabs.master/
+      master getfile /var/spool/cron/crontabs/ /var/spool/cron/crontabs.master/
       ;;
   esac
 

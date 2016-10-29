@@ -28,58 +28,29 @@ LICENSE
 ###############################################################################
 
 
-# List all settings
-settings_list() {
-  # Hardcoded settings
-  echo SCROOTDIR
-  echo SCPREFIX
-  echo SCLIBDIR
-  echo SCBIN
-  echo SCMDDIR
-  echo SCDEF
+db_setup() {
+  require settings
 
-  # Modules settings
-  for m in $SCMODULES; do
-    if [ "$(type -t "${m}_settings")" = "function" ]; then
-      "${m}_settings"
-    fi
-  done
 }
 
-# Print all settings with their values
-settings_print() {
-  for s in $(settings list); do
-    echo "$s='${!s}'"
-  done
+# Output a backup of the master db as an xz file on stdout
+db_master_backup() {
+  require master
+  master exec "cd /; which pg_dumpall &>/dev/null && su -c 'pg_dumpall -c | xz -c -6' postgres"
 }
 
-# Save settings
-settings_save() {
-  local foreign_settings;
-  if [ "$SCSETTINGS" ]; then
-    if [ -r "$SCSETTINGS" ]; then
-      foreign_settings="$(grep -E -v -f <(settings list | sed -e 's/$/=/' -e 's/^/\^/') "$SCSETTINGS")"
-    fi
-    settings print > "$SCSETTINGS".new
-    echo "$foreign_settings" >> "$SCSETTINGS".new
-    mv "$SCSETTINGS".new "$SCSETTINGS"
-  fi
+# Output a backup of the local db as an xz file on stdout
+db_backup() {
+  syspackage postgresql-client-9.4 pg_dumpall
+  su -c 'pg_dumpall -c | xz -c -6' postgres
 }
 
-# Set a setting
-# Prompt the user for its value if unset
-# Do not change its value if set
-settings_prompt() {
-  local name="$1"; shift
-  local default="$1"; shift
-  local prompt="$1"; shift
-
-  if [ -z "${!name}" ]; then
-    read -r -p "$prompt" -i "$default" v;
-    declare -g "$name=$v"
-  fi
+# Restores a dump from stdin into the local postgres
+db_restore() {
+  su -c 'unxz -c | grep -Pv "^(?:CREATE|DROP|ALTER) ROLE postgres" | psql -q' postgres >/dev/null
 }
 
-settings() {
-  subcall settings "$@"
+db() {
+  subcall db "$@"
 }
+

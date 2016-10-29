@@ -30,8 +30,13 @@ LICENSE
 
 # Temporary files management
 
-temp_newdir() {
+temp_dir() {
   TEMP_FILE="$(mktemp -d)"
+  trap "rm -rf '$TEMP_FILE'" EXIT
+}
+
+temp_file() {
+  TEMP_FILE="$(mktemp)"
   trap "rm -rf '$TEMP_FILE'" EXIT
 }
 

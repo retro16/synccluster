@@ -43,31 +43,53 @@ EOF
 }
 
 master_setup() {
-  require snapshot
   require settings
-  snapshot create
-  settings prompt SCMASTER_USER "root@" "Enter master server user and host:"
+  syspackage openssh-client ssh ssh-keygen ssh-copy-id
+  syspackage rsync
+  settings prompt SCMASTER_USER "" "Enter master server user and host (empty if this host is the master):"
+  if [ -z "$SCMASTER_USER" ]; then
+    echo "This host is a master"
+    settings save
+    return 0
+  fi
+
+  if ! [ -r "$HOME/.ssh/id_rsa" ]; then
+    ssh-keygen
+  fi
+
+  ssh-copy-id "$SCMASTER_USER"
+  if ! master exec exit 0; then
+    echo "Link to the master failed"
+    exit 1
+  fi
+
+  if ! master exec "$SC"; then
+    echo "Error: $SC is not installed on the master server."
+    exit 1
+  fi
+
+  settings save
+  echo "Linked successfully to $SCMASTER_USER"
 }
 
-master_check() {
-  if [ -z "$SCMASTER_USER" ]; then
-    echo "Master server not defined"
-    exit 2
-  fi
+# Undo the link to the master
+master_clean() {
+  require settings
+  unset SCMASTER_USER
+  settings save
 }
 
 master_enabled() {
-  if [ -z "$SCMASTER_USER" ]; then
-    return 1;
+  if [ -z "$SCMASTER_USER" ] || ! [ -r "$HOME/.ssh/id_rsa" ]; then
+    return 1
   fi
-  return 0;
+  return 0
 }
 
 master_getfile() {
   master check
-  local files=("$@")
-  local sources=("${files[@]:0:${#files[@]}-1}")
-  local dest="${files[@]: -1}"
+  local source="$1"; shift
+  local dest="$1"; shift
 
   rsync -az "$SCMASTER_USER:${sources[@]}" "$dest"
 }
