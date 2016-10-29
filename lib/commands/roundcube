@@ -1,0 +1,123 @@
+#!/bin/bash
+###############################################################################
+<<LICENSE
+
+The MIT License (MIT)
+
+Copyright (c) 2016 Jean-Matthieu COULON
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+LICENSE
+###############################################################################
+
+
+roundcube_version="1.1.4"
+
+roundcube_setup() {
+  require www setup
+
+  roundcube download
+  roundcube install
+}
+
+roundcube_ready() {
+  if has www && [ -e "$WWWDIR/roundcubemail-$roundcube_version" ] && [ "$(readlink -fs "$WWWDIR/roundcubemail)" = "$WWWDIR/roundcubemail-$roundcube_version" ] && www hasconf roundcubemail; then
+    return 0
+  fi
+  return 1
+}
+
+roundcube_download() {
+  local roundcube_url="http://downloads.sourceforge.net/project/roundcubemail/roundcubemail/$roundcube_version/roundcubemail-$roundcube_version-complete.tar.gz"
+
+  syspackage wget wget
+  syspackage tar tar
+  syspackage gzip gzip
+  require temp
+
+  local targz="$(temp file)"
+  wget -O"$targz" "$roundcube_url"
+  rm -rf "$WWWDIR/roundcubemail-$roundcube_version" "$WWWDIR/roundcubemail"
+  tar -C "$WWWDIR" -xvzf /tmp/roundcube.tar.gz
+  ln -fs "roundcubemail-$roundcube_version" "$WWWDIR/roundcubemail"
+
+  temp release
+}
+
+roundcube_install() {
+  roundcube create_db
+  git_get https://github.com/blind-coder/rcmcarddav.git "$WWWDIR/plugins/carddav"
+  chown -R www-data:www-data "$WWWDIR/roundcubemail/logs"
+  chown -R www-data:www-data "$WWWDIR/roundcubemail/temp"
+}
+
+roundcube_create_db() {
+  require db setup
+  require settings
+  settings prompt ROUNDCUBE_PASSWORD "" "Roundcube user database password"
+
+  db create roundcubemail "$ROUNDCUBE_PASSWORD"
+  db sql roundcubemail "$ROUNDCUBE_PASSWORD" roundcubemail < "$WWWDIR/roundcubemail/SQL/postgres.initial.sql"
+
+  settings save
+}
+
+roundcube_conf() {
+  cat <<EOF
+<?php
+\$config = array();
+\$config['language'] = 'fr_FR';
+\$config['smtp_debug'] = false;
+\$config['imap_debug'] = false;
+\$config['log_logins'] = false;
+\$config['log_session'] = false;
+\$config['db_dsnw'] = 'pgsql://roundcubemail:${ROUNDCUBE_PASSWORD}@127.0.0.1/roundcubemail'
+
+\$config['default_host'] = '$DOMAIN';
+\$config['default_port'] = 143;
+\$config['imap_auth_type'] = 'PLAIN';
+
+\$config['smtp_server'] = '$DOMAIN';
+\$config['smtp_port'] = 25;
+\$config['smtp_user'] = '%u';
+\$config['smtp_pass'] = '%p';
+\$config['smtp_auth_type'] = 'PLAIN';
+
+\$config['support_url'] = '';
+\$config['product_name'] = 'Roundcube Webmail';
+\$config['des_key'] = '9j!eitu()""@551hdkcoeoze';
+
+\$config['plugins'] = array(
+    'archive',
+    'zipdownload',
+    'carddav',
+);
+
+\$config['skin'] = 'larry';
+EOF
+}
+
+roundcube_settings() {
+  echo ROUNDCUBE_PASSWORD
+}
+
+roundcube() {
+  subcall roundcube "$@"
+}

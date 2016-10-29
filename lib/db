@@ -38,6 +38,13 @@ db_setup() {
   syspackage postgresql-client psql
 }
 
+db_ready() {
+  if db enabled; then
+    return 0
+  fi
+  return 1
+}
+
 db_cleanup() {
   require settings
   unset PGVERSION
@@ -62,6 +69,38 @@ db_restore() {
   syspackage unxz xz-utils
   syspackage postgresql-client psql
   su -c 'unxz -c | grep -Pv "^(?:CREATE|DROP|ALTER) ROLE postgres" | psql -q' postgres >/dev/null
+}
+
+db_create() {
+  local user="$1"; shift
+  local password="$1"; shift
+  local database="$1"; shift
+
+  pushd / &>/dev/null
+  su -c "psql -c 'DROP DATABASE IF EXISTS $database;'" postgres
+  su -c "psql -c 'DROP ROLE IF EXISTS $user;'" postgres
+  su -c "psql -c 'CREATE USER $user WITH PASSWORD '\'${password}\'';'" postgres
+  su -c "psql -c 'CREATE DATABASE $database OWNER=$user;'" postgres
+  popd &>/dev/null
+}
+
+db_drop() {
+  local user="$1"; shift
+  local database="$1"; shift
+  pushd / &>/dev/null
+  su -c "psql -c 'DROP DATABASE IF EXISTS $database;'" postgres
+  su -c "psql -c 'DROP ROLE IF EXISTS $user;'" postgres
+  popd &>/dev/null
+}
+
+db_sql() {
+  local user="$1"; shift
+  local password="$1"; shift
+  local database="$1"; shift
+
+  pushd / &>/dev/null
+  PGPASSWORD="${password}" psql -U "$user" -h localhost -p 5432 "$database"
+  popd &>/dev/null
 }
 
 db_enabled() {

@@ -29,6 +29,8 @@ LICENSE
 
 
 www_setup() {
+  require settings
+
   syspackage apache2 apache2ctl
   syspackage libapache2-mod-php5 /usr/lib/apache2/modules/libphp5.so
   syspackage php5-cli php5
@@ -43,13 +45,31 @@ www_setup() {
   a2enmod proxy_http
 
   www configure_phpini /etc/php5/apache2/php.ini
+
+  systemctl enable apache2
+
+  WWWDIR=/var/www
+  settings save
+}
+
+www_cleanup() {
+  require settings
+  unset WWWDIR
+  settings save
 }
 
 # Put standard input into an apache conf file and enable it
-www_add_apache_conf() {
+www_addconf() {
   local target="/etc/apache2/conf-available/$1.conf"
   cat > "$target"
   a2enconf "$1"
+}
+
+www_hasconf() {
+  if [ -e "/etc/apache2/conf-enabled/$1.conf" ]; then
+    return 0
+  fi
+  return 1
 }
 
 www_configure_phpini() {
@@ -60,6 +80,24 @@ www_configure_phpini() {
   sed -i 's/[ ;]*upload_max_filesize *= .*/upload_max_filesize = 2048M/' "$target"
   sed -i 's/[ ;]*date.timezone *= .*/date.timezone = Europe\/Paris/' "$target"
   sed -i 's/[ ;]*upload_max_filesize *= .*/upload_max_filesize = 2048M/' "$target"
+}
+
+www_enabled() {
+  if [ "$WWWDIR" ]; then
+    return 0
+  fi
+  return 1
+}
+
+www_ready() {
+  if www enabled && [ -e "/etc/apache2" ] && systemctl status apache2 &>/dev/null; then
+    return 0
+  fi
+  return 1
+}
+
+www_settings() {
+  echo WWWDIR
 }
 
 www() {

@@ -48,19 +48,30 @@ subcall() {
 
 # Import a common module
 require() {
-  if [[ " $SCMODULES " == *" $1 "* ]]; then
-    # Already loaded
-    return 0
+  local mod="$1"; shift
+  local setup="$1"; shift
+
+  if [[ " $SCMODULES " != *" $mod "* ]]; then
+    if [ -r "$SCLIBDIR/$mod" ]; then
+      source "$SCLIBDIR/$mod"
+    elif [ -r "$SCCMDDIR/$mod" ]; then
+      source "$SCCMDDIR/$mod"
+    else
+      echo "Required module $mod not found"
+      exit 2
+    fi
+    SCMODULES="$SCMODULES $mod"
   fi
-  if [ -r "$SCLIBDIR/$1" ]; then
-    source "$SCLIBDIR/$1"
-  elif [ -r "$SCCMDDIR/$1" ]; then
-    source "$SCCMDDIR/$1"
-  else
-    echo "Required module $1 not found"
-    exit 2
+
+  if [ "$setup" = setup ]; then
+    if [ "$(type -t "${mod}_ready")" = "function" ] && [ "$(type -t "${mod}_setup")" = "function" ] && ! "$mod" ready; then
+      "$mod" setup
+    fi
+  elif [ "$setup" = ready ]; then
+    if [ "$(type -t "${mod}_ready")" = "function" ] && ! "$mod" ready; then
+      echo "Module $mod found but not set up"
+    fi
   fi
-  SCMODULES="$SCMODULES $1"
 }
 
 # Import an optional module
@@ -79,6 +90,12 @@ has() {
   if [ "$(type -t "${mod}_enabled")" = "function" ]; then
     if ! "${mod}_enabled"; then
       # The module does not want to exist !
+      return 1
+    fi
+  fi
+  if [ "$(type -t "${mod}_ready")" = "function" ]; then
+    if ! "${mod}_ready"; then
+      # The module is not set up !
       return 1
     fi
   fi
@@ -108,3 +125,20 @@ syspackage() {
   done
 }
 
+git_get() {
+  local url="$1"
+  local target="$2"
+  syspackage git git
+
+  if [ -d "$target/.git" ]; then
+    pushd "$target" &>/dev/null
+    git clean -dfx
+    git pull
+    popd &>/dev/null
+  elif [ -d "$target" ]; then
+    rm -rf "$target"
+    git clone "$url" "$target"
+  else
+    git clone "$url" "$target"
+  fi
+}
