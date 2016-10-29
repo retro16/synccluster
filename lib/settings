@@ -1,0 +1,86 @@
+#!/bin/bash
+###############################################################################
+<<LICENSE
+
+The MIT License (MIT)
+
+Copyright (c) 2016 Jean-Matthieu COULON
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+LICENSE
+###############################################################################
+
+
+# List all settings
+settings_list() {
+  # Hardcoded settings
+  echo SCROOTDIR
+  echo SCPREFIX
+  echo SCLIBDIR
+  echo SCBIN
+  echo SCMDDIR
+  echo SCDEF
+
+  # Modules settings
+  for m in $SCMODULES; do
+    if [ "$(type -t "${m}_settings")" = "function" ]; then
+      "${m}_settings"
+    fi
+  done
+}
+
+# Print all settings with their values
+settings_print() {
+  for s in $(settings list); do
+    echo "$s='${!s}'"
+  done
+}
+
+# Save settings
+settings_save() {
+  local foreign_settings;
+  if [ "$SCSETTINGS" ]; then
+    if [ -r "$SCSETTINGS" ]; then
+      foreign_settings="$(grep -E -v -f <(settings list | sed -e 's/$/=/' -e 's/^/\^/') "$SCSETTINGS")"
+    fi
+    settings print > "$SCSETTINGS".new
+    echo "$foreign_settings" >> "$SCSETTINGS".new
+    mv "$SCSETTINGS".new "$SCSETTINGS"
+  fi
+}
+
+# Set a setting
+# Prompt the user for its value if unset
+# Do not change its value if set
+settings_prompt() {
+  local name="$1"; shift
+  local default="$1"; shift
+  local prompt="$1"; shift
+
+  if [ -z "${!name}" ]; then
+    read -r -p "$prompt" -i "$default" v;
+    declare -g "$name=$v"
+    settings save
+  fi
+}
+
+settings() {
+  subcall settings "$@"
+}

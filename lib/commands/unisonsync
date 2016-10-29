@@ -27,72 +27,30 @@ SOFTWARE.
 LICENSE
 ###############################################################################
 
+require master
 
-### Initialization ###
-SCMODULES=""
-
-
-### Global functions ###
-
-# Call a submodule
-subcall() {
-  mod="$1"; shift
-  sub="$1"; shift
-  if [ "$(type -t "${mod}_$sub")" = "function" ]; then
-    "${mod}_$sub"
-  else
-    echo "Cannot find $SC $mod $sub"
-    exit 1
-  fi
+unisonsync_setup() {
+  syspackage unison unison
 }
 
-# Import a common module
-require() {
-  if [[ " $SCMODULES " == *" $1 "* ]]; then
-    # Already loaded
+unisonsync_adduser() {
+  local user="$1"; shift
+  local homedir="$1"; shift
+
+  cat > "$SCUNISON/$user.prf" << EOF
+include _common
+root = /home/$user
+root = ssh://$SCMASTER_USER/$homedir
+EOF
+}
+
+unisonsync_enabled() {
+  if has master && [ "$SCUNISON" ]; then
     return 0
   fi
-  if [ -r "$SCLIBDIR/$1" ]; then
-    source "$SCLIBDIR/$1"
-  elif [ -r "$SCCMDDIR/$1" ]; then
-    source "$SCCMDDIR/$1"
-  else
-    echo "Required module $1 not found"
-    exit 2
-  fi
-  SCMODULES="$SCMODULES $1"
+  return 1
 }
 
-# Import an optional module
-has() {
-  if [[ " $SCMODULES " == *" $1 "* ]]; then
-    # Already loaded
-    true
-  elif [ -r "$SCLIBDIR/$1" ]; then
-    source "$SCLIBDIR/$1"
-  elif [ -r "$SCCMDDIR/$1" ]; then
-    source "$SCCMDDIR/$1"
-  else
-    return 2
-  fi
-  SCMODULES="$SCMODULES $1"
-  if [ "$(type -t "${mod}_enabled")" = "function" ]; then
-    if ! "${mod}_enabled"; then
-      # The module does not want to exist !
-      return 1
-    fi
-  fi
-  return 0
+unisonsync() {
+  subcall unisonsync "$@"
 }
-
-# Check that command-lines are available, and if some are missing, install the corresponding system package
-syspackage() {
-  local package="$1"; shift
-  for c in "$@"; do
-    if ! which "$c" &>/dev/null; then
-      apt install "$package"
-      return $?
-    fi
-  done
-}
-

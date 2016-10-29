@@ -1,0 +1,152 @@
+#!/bin/bash
+###############################################################################
+<<LICENSE
+
+The MIT License (MIT)
+
+Copyright (c) 2016 Jean-Matthieu COULON
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+LICENSE
+###############################################################################
+
+
+user_help() {
+cat <<EOF
+$SC user: User management.
+
+$SC user help
+  This help
+
+$SC user pull
+  Synchronize users from the master
+EOF
+}
+
+user_setup() {
+  require master
+  master setup
+
+  require unisonsync
+  unisonsync setup
+}
+
+user_pull() {
+  require master
+  require temp
+  local T="$(temp newdir)"
+
+
+  master getfile "/etc/{passwd,shadow,group,gshadow}" "$T"/
+  cp /etc/passwd "$T"/passwd.new
+  cp /etc/shadow "$T"/shadow.new
+  cp /etc/group "$T"/group.new
+  cp /etc/gshadow "$T"/gshadow.new
+
+  # Merge user files
+
+  grep -E ":x:100[0-9][0-9]:" "$T/group" | while IFS=':' read group pass gid members; do
+    # Add group if missing
+    if ! grep -E "^$group:x:" "$T/group.new"; then
+      grep -E "^$group:x:" "$T/group" >> "$T/group.new"
+    fi
+  done
+
+  grep -E ":x:100[0-9][0-9]:" "$T/passwd" | while IFS=':' read user pass uid gid name homedir shell; do
+    if [ "$ROLE" != secondary ] && [ "$ROLE" != roaming ]; then
+      # Add user if missing
+      if ! grep -E "^$user:" "$T/passwd.new" &>/dev/null; then
+        grep -E "^$user:" "$T/passwd" >> "$T/passwd.new"
+
+        # Add user to the same groups as local user
+        sed -i 's;\(.*:x:[0-9]*.*[:,]local.*\);\1,'"$user"';' "$T/group.new"
+
+        # Create home directory from skeleton
+        if ! [ -d "$homedir" ]; then
+          cp -a /etc/skel "$homedir"
+          chown -R "$uid:$gid" "$homedir"
+        fi
+      fi
+
+      if grep -E "^$user:" "$T/passwd.new" &>/dev/null; then
+        # Update unison profile
+        if has unisonsync; then
+          unisonsync adduser "$user" "$homedir"
+        fi
+      fi
+    fi
+
+    # Update password
+    grep -vE "^$user:" "$T/shadow.new" > "$T/shadow.new."
+    grep -E "^$user:" "$T/shadow" >> "$T/shadow.new."
+    mv "$T/shadow.new." "$T/shadow.new"
+
+    echo "$user"
+  done
+
+  # Update sudoers
+  if grep -E "^sudo:x:" &>/dev/null "$T/group.new"; then
+    grep -vE "^sudo:x:" "$T/group.new" > "$T/group.new."
+    sudoers="$(grep -E "^sudo:x:" "$T/group.new" | cut -d: -f1-3):"
+    while read user; do
+      if grep -E "^$user:x:100[0-9][0-9]:" "$T/passwd.new"; then
+        sudoers="$sudoers$user,"
+        break
+      fi
+    done <<< "$(cat "$T/group" | cut -d: -f4 | tr ',' '\n')"
+    echo "${sudoers:0: -1}" >> "$T/group.new." # Remove trailing comma
+    mv "$T/group.new." "$T/group.new"
+  fi
+
+  cp "$T/gshadow" "$T/gshadow.new"
+
+  # Update system files
+  mv "$T/passwd.new" /etc/passwd
+  mv "$T/shadow.new" /etc/shadow
+  mv "$T/group.new" /etc/group
+  chown root:root /etc/passwd /etc/shadow /etc/group
+  chmod 644 /etc/passwd /etc/group
+  chmod 600 /etc/shadow
+
+  # Remove obsolete users
+  grep -E ":x:100[0-9][0-9]:" /etc/passwd | while IFS=':' read user pass uid gid name homedir shell; do
+    if ! grep -E "^$user:" "$T"/passwd; then
+      echo "User $user was removed. Home directory left untouched."
+      rm -f "$SCUNISON/$user.prf"
+      userdel "$user"
+    fi
+  done
+
+  case "$ROLE" in
+    standby|secondary)
+      # Synchronize crontabs
+      dir /var/spool/cron/crontabs.master
+      rsync -a "$MASTER_USER":/var/spool/cron/crontabs/ /var/spool/cron/crontabs.master/
+      ;;
+  esac
+
+
+  temp release
+  unset T
+}
+
+user() {
+  subcall user "$@"
+}

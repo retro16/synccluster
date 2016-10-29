@@ -7,7 +7,7 @@ install() {
   chmod u+rwx,g+rx,o+rx "$SCBIN"
 
   rm -rf "$SCLIBDIR" || true
-  mkdir -p "$SCLIBDIR"
+  mkdir -p "$(dirname "$SCLIBDIR")" || true
   cp -r "$SCCURBINDIR/lib" "$SCLIBDIR"
   chown -R root:root "$SCLIBDIR"
   chmod -R u+rwX,g+rX,o+rX "$SCLIBDIR"
@@ -18,6 +18,8 @@ install() {
 
 # Postinstall script
 postinstall() {
+  require settings
+  settings save
   echo "$SC installed"
 }
 

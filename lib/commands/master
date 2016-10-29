@@ -28,71 +28,76 @@ LICENSE
 ###############################################################################
 
 
-### Initialization ###
-SCMODULES=""
+# Module to access master server
 
+master_help() {
+cat <<EOF
+$SC master
+  Do operations with the master server
 
-### Global functions ###
-
-# Call a submodule
-subcall() {
-  mod="$1"; shift
-  sub="$1"; shift
-  if [ "$(type -t "${mod}_$sub")" = "function" ]; then
-    "${mod}_$sub"
-  else
-    echo "Cannot find $SC $mod $sub"
-    exit 1
-  fi
+$SC master setup [REMOTE]
+  Initialize a link between this server and a remote.
+  REMOTE must be of the form USER@HOST.
+  Example: $SC master setup root@example.com
+EOF
 }
 
-# Import a common module
-require() {
-  if [[ " $SCMODULES " == *" $1 "* ]]; then
-    # Already loaded
-    return 0
-  fi
-  if [ -r "$SCLIBDIR/$1" ]; then
-    source "$SCLIBDIR/$1"
-  elif [ -r "$SCCMDDIR/$1" ]; then
-    source "$SCCMDDIR/$1"
-  else
-    echo "Required module $1 not found"
+master_setup() {
+  require snapshot
+  require settings
+  snapshot create
+  settings prompt SCMASTER_USER "root@" "Enter master server user and host:"
+}
+
+master_check() {
+  if [ -z "$SCMASTER_USER" ]; then
+    echo "Master server not defined"
     exit 2
   fi
-  SCMODULES="$SCMODULES $1"
 }
 
-# Import an optional module
-has() {
-  if [[ " $SCMODULES " == *" $1 "* ]]; then
-    # Already loaded
-    true
-  elif [ -r "$SCLIBDIR/$1" ]; then
-    source "$SCLIBDIR/$1"
-  elif [ -r "$SCCMDDIR/$1" ]; then
-    source "$SCCMDDIR/$1"
+master_enabled() {
+  if [ -z "$SCMASTER_USER" ]; then
+    return 1;
+  fi
+  return 0;
+}
+
+master_getfile() {
+  master check
+  local files=("$@")
+  local sources=("${files[@]:0:${#files[@]}-1}")
+  local dest="${files[@]: -1}"
+
+  rsync -az "$SCMASTER_USER:${sources[@]}" "$dest"
+}
+
+master_exec() {
+  set +e
+  local rv
+  if [ "$SCMASTER_USER" ]; then
+    ssh "$MASTER_USER" "$SC master exec" "$@"
+    rv="$?"
   else
-    return 2
+    "$@"
+    rv="$?"
   fi
-  SCMODULES="$SCMODULES $1"
-  if [ "$(type -t "${mod}_enabled")" = "function" ]; then
-    if ! "${mod}_enabled"; then
-      # The module does not want to exist !
-      return 1
-    fi
-  fi
-  return 0
+  set -e
+  return $rv
 }
 
-# Check that command-lines are available, and if some are missing, install the corresponding system package
-syspackage() {
-  local package="$1"; shift
-  for c in "$@"; do
-    if ! which "$c" &>/dev/null; then
-      apt install "$package"
-      return $?
-    fi
-  done
+master_status() {
+  if [ "$SCMASTER_USER" ]; then
+    echo "This host points to master host $SCMASTER_USER"
+  else
+    echo "This host has no master"
+  fi
 }
 
+master_settings() {
+  echo SCMASTER_USER
+}
+
+master() {
+  subcall master "$@"
+}

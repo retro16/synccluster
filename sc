@@ -28,31 +28,53 @@ SOFTWARE.
 LICENSE
 ###############################################################################
 
+set -e
+
+# Defaults
 SC="sc"
 SCROOTDIR=""
 SCPREFIX="$SCROOTDIR/usr/local"
 SCLIBDIR="$SCPREFIX/lib/$SC"
 SCBIN="$SCPREFIX/sbin/$SC"
 SCCMDDIR="$SCLIBDIR/commands"
-SCDEFDIR="$SCROOTDIR/etc/default/$SC"
+SCDEF="$SCROOTDIR/etc/default/$SC"
+SCSETTINGS="$SCROOTDIR/etc/$SC"
+
+# Load settings from etc file
+if [ -r "$SCDEF" ]; then
+  source "$SCDEF"
+fi
+
+if [ -r "$SCSETTINGS" ]; then
+  source "$SCSETTINGS"
+fi
+
+# Fetch information we can only have at startup
+SCPWD="$PWD"
 SCCURBIN="$(readlink -fs "$0")"
 SCCURBINNAME="$(basename "$SCCURBIN")"
 SCCURBINDIR="$(dirname "$SCCURBIN")"
 SCINSTALLED=""
 ARGS=("$@")
 
-set -e
+### Main program ###
 
-if [ -r "$SCDEFDIR" ]; then
-  source "$SCDEFDIR"
+# Command-line parsing
+if [ -z "${ARGS[0]}" ] || [ "${ARGS[@]}" = "--help" ]; then
+  echo "$SC usage:"
+  echo "$SC subcommand [PARAMETERS]"
+  exit 1
 fi
+
+subcmd="${ARGS[0]}"
+ARGS=("${ARGS[@]:1}")
 
 if [ "$UID" -ne 0 ]; then
 echo "This program requires root privileges."
 exit 1
 fi
 
-if [ -r "$SCLIBDIR/common" ]; then
+if [ -r "$SCLIBDIR/common" ] && [ "$subcmd" != "install" ]; then
   SCINSTALLED=1
   source "$SCLIBDIR/common"
 else
@@ -60,9 +82,32 @@ else
   if [ -r "$SCCURBINDIR/lib/common" ]; then
     source "$SCCURBINDIR/lib/common"
   else
-    echo "$SC is not installed."
+    echo "$SC cannot be installed."
     echo "Error: lib directory not found"
     exit 1
   fi
+  if [ "$subcmd" = "install" ]; then
+    if [ -r "$SCCURBINDIR/lib/commands/install" ]; then
+      source "$SCCURBINDIR/lib/commands/install"
+      install
+    else
+      echo "Error: Install module not found."
+      exit 1
+    fi
+    exit 0
+  else
+    echo "$SC must be installed."
+    echo "Please run:"
+    echo " # $SC install"
+  fi
 fi
+
+if [ -r "$SCCMDDIR/$subcmd" ]; then
+  source "$SCCMDDIR/$subcmd"
+  $subcmd "${ARGS[@]}"
+else
+  echo "$subcmd: subcommand not found"
+  exit 1
+fi
+
 
