@@ -46,13 +46,33 @@ user_setup() {
 
   require unisonsync
   unisonsync setup
+
+  require crontask
+  crontask add user hourly
+
+  syspackage sudo
+  # Enable passwordless sudo
+  cat > /etc/sudoers.d/"$SC" <<EOF
+root   ALL=NOPASSWD: ALL
+%sudo  ALL=NOPASSWD: ALL
+EOF
+}
+
+user_cleanup() {
+  crontask remove user hourly
+}
+
+user_cron() {
+  user_pull
 }
 
 user_pull() {
-  require master
+  if user enabled; then
+    exit 0
+  fi
+
   require temp
   local T="$(temp dir)"
-
 
   master getfile "/etc/{passwd,shadow,group,gshadow}" "$T"/
   cp /etc/passwd "$T"/passwd.new
@@ -130,7 +150,7 @@ user_pull() {
     if ! grep -E "^$user:" "$T"/passwd; then
       echo "User $user was removed. Home directory left untouched."
       if has unisonsync; then
-        unison deluser "$user"
+        unisonsync deluser "$user"
       fi
       userdel "$user"
     fi
@@ -147,6 +167,13 @@ user_pull() {
 
   temp release
   unset T
+}
+
+user_enabled() {
+  if has master; then
+    return 0
+  fi
+  return 1
 }
 
 user() {

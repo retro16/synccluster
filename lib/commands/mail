@@ -1,0 +1,133 @@
+#!/bin/bash
+###############################################################################
+<<LICENSE
+
+The MIT License (MIT)
+
+Copyright (c) 2016 Jean-Matthieu COULON
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+LICENSE
+###############################################################################
+
+
+mail_setup() {
+  require settings
+
+  syspackage postfix postfix
+  syspackage dovecot-imapd doveadm
+  syspackage procmail procmail
+
+  settings prompt MAILDIR "" "Enter mail directory:"
+  if ! [ -d "$MAILDIR" ]; then
+    echo "$MAILDIR does not exist."
+    exit 2
+  fi
+
+  mail postfix_conf > "/etc/postfix/main.cf"
+  mail procmail_conf > "/etc/procmailrc"
+  mail dovecot_conf > "/etc/dovecot/dovecot.conf"
+
+  settings save
+}
+
+mail_postfix_conf() {
+  cat <<EOF
+alias_database = hash:/etc/aliases
+alias_maps = hash:/etc/aliases
+append_dot_mydomain = no
+biff = no
+config_directory = /etc/postfix
+inet_interfaces = all
+mailbox_command = procmail -f- -a "\$USER"
+mailbox_size_limit = 0
+mydestination = $(dnsdomainname), localhost
+myhostname = $(dnsdomainname)
+mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128
+myorigin = /etc/mailname
+readme_directory = no
+recipient_delimiter = +
+smtp_tls_session_cache_database = btree:\${data_directory}/smtp_scache
+smtpd_banner = \$myhostname ESMTP \$mail_name (Debian/GNU)
+smtpd_relay_restrictions = permit_mynetworks permit_sasl_authenticated reject_unauth_destination
+smtpd_sasl_auth_enable = yes
+smtpd_sasl_authenticated_header = yes
+smtpd_sasl_local_domain = \$myorigin
+smtpd_sasl_path = private/auth
+smtpd_sasl_security_options = noanonymous
+smtpd_sasl_type = dovecot
+smtpd_tls_cert_file = /etc/ssl/certs/ssl-cert-snakeoil.pem
+smtpd_tls_key_file = /etc/ssl/private/ssl-cert-snakeoil.key
+smtpd_tls_session_cache_database = btree:\${data_directory}/smtpd_scache
+smtpd_use_tls = yes
+EOF
+}
+
+mail_procmail_conf() {
+  cat <<EOF
+UMASK=007
+DEFAULT=\${EPREFIX}$MAILDIR/\$LOGNAME/Maildir/
+EOF
+}
+
+mail_dovecot_conf() {
+  cat <<EOF
+disable_plaintext_auth = no
+mail_privileged_group = mail
+mail_home = $MAILDIR/%u
+mail_location = maildir:$MAILDIR/%u/Maildir:LAYOUT=fs
+userdb {
+  driver = passwd
+}
+passdb {
+  args = %s
+  driver = pam
+}
+protocols = "imap"
+protocol imap {
+}
+plugin {
+  autocreate = Trash
+  autocreate2 = Sent
+  autosubscribe = Trash
+  autosubscribe2 = Sent
+}
+service auth {
+  unix_listener /var/spool/postfix/private/auth {
+    group = postfix
+    mode = 0660
+    user = postfix
+  }
+}
+auth_mechanisms = plain login
+ssl = yes
+ssl_cert = </etc/ssl/certs/ssl-cert-snakeoil.pem
+ssl_key = </etc/ssl/private/ssl-cert-snakeoil.key
+ssl_cipher_list = ALL:!LOW:!SSLv2:ALL:!aNULL:!ADH:!eNULL:!EXP:RC4+RSA:+HIGH:+MEDIUM
+EOF
+}
+
+mail_settings() {
+  echo MAILDIR
+}
+
+mail() {
+  subcall mail "$@"
+}

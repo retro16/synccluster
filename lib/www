@@ -28,54 +28,40 @@ LICENSE
 ###############################################################################
 
 
-db_setup() {
-  require settings
+www_setup() {
+  syspackage apache2 apache2ctl
+  syspackage libapache2-mod-php5 /usr/lib/apache2/modules/libphp5.so
+  syspackage php5-cli php5
+  syspackage php5-apcu /etc/php5/mods-available/apcu.ini
+  syspackage php5-curl /usr/share/php5/curl/curl.ini
+  syspackage php5-fpm /usr/sbin/php5-fpm
+  syspackage php5-gd /usr/share/php5/gd/gd.ini
+  syspackage php5-imap /usr/share/php5/imap/imap.ini
+  syspackage php5-pgsql /usr/share/php5/pgsql/pgsql.ini
 
-  syspackage postgresql pg_createcluster
-  PGVERSION="$(pg_lsclusters | tail -1 | cut -d' ' -f1)"
+  a2enmod proxy
+  a2enmod proxy_http
 
-  syspackage postgresql-contrib /usr/lib/postgresql/$PGVERSION/bin/pgdump
-  syspackage postgresql-client psql
+  www configure_phpini /etc/php5/apache2/php.ini
 }
 
-db_cleanup() {
-  require settings
-  unset PGVERSION
-  settings save
+# Put standard input into an apache conf file and enable it
+www_add_apache_conf() {
+  local target="/etc/apache2/conf-available/$1.conf"
+  cat > "$target"
+  a2enconf "$1"
 }
 
-# Output a backup of the master db as an xz file on stdout
-db_master_backup() {
-  require master
-  master exec "cd /; which pg_dumpall &>/dev/null && su -c 'pg_dumpall -c | xz -c -6' postgres"
+www_configure_phpini() {
+  local target="$1"; shift
+  sed -i 's/[ ;]*max_execution_time *= .*/max_execution_time = 600/' "$target"
+  sed -i 's/[ ;]*memory_limit *= .*/memory_limit = 256M/' "$target"
+  sed -i 's/[ ;]*post_max_size *= .*/post_max_size = 64M/' "$target"
+  sed -i 's/[ ;]*upload_max_filesize *= .*/upload_max_filesize = 2048M/' "$target"
+  sed -i 's/[ ;]*date.timezone *= .*/date.timezone = Europe\/Paris/' "$target"
+  sed -i 's/[ ;]*upload_max_filesize *= .*/upload_max_filesize = 2048M/' "$target"
 }
 
-# Output a backup of the local db as an xz file on stdout
-db_backup() {
-  syspackage xz xz-utils
-  syspackage postgresql-client pg_dumpall
-  su -c 'pg_dumpall -c | xz -c -6' postgres
+www() {
+  subcall www "$@"
 }
-
-# Restores a dump from stdin into the local postgres
-db_restore() {
-  syspackage unxz xz-utils
-  syspackage postgresql-client psql
-  su -c 'unxz -c | grep -Pv "^(?:CREATE|DROP|ALTER) ROLE postgres" | psql -q' postgres >/dev/null
-}
-
-db_enabled() {
-  if [ "$PGVERSION" ] && ls "/usr/lib/postgresql/$PGVERSION/bin/postgres" &>/dev/null && netstat -platun | grep -E ":5432.*LISTEN.*postgres" &>/dev/null; then
-    return 0
-  fi
-  return 1
-}
-
-db_settings() {
-  echo PGVERSION
-}
-
-db() {
-  subcall db "$@"
-}
-

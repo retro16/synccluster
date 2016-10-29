@@ -27,55 +27,33 @@ SOFTWARE.
 LICENSE
 ###############################################################################
 
+apt_setup() {
+  local MIRROR="$(grep -E '^deb [hft]*tp://.*debian.* main' /etc/apt/sources.list | head -n 1 | sed 's;deb \([^ ]*\) [a-z/]* main.*;\1;')"
+  local DISTNAME="$(grep -E '^deb [hft]*tp://.*debian.* main' /etc/apt/sources.list | head -n 1 | sed 's;deb [^ ]* \([a-z/]*\) main.*;\1;')"
 
-db_setup() {
-  require settings
+  cat > /etc/apt/sources.list.d/${SC}_backports.list << EOF
+deb $MIRROR $DISTNAME-backports main contrib non-free
+deb-src $MIRROR $DISTNAME-backports main contrib non-free
+EOF
 
-  syspackage postgresql pg_createcluster
-  PGVERSION="$(pg_lsclusters | tail -1 | cut -d' ' -f1)"
+  cat > /etc/apt/sources.list.d/${SC}_contrib.list << EOF
+deb $MIRROR $DISTNAME contrib non-free
+deb-src $MIRROR $DISTNAME contrib non-free
+EOF
 
-  syspackage postgresql-contrib /usr/lib/postgresql/$PGVERSION/bin/pgdump
-  syspackage postgresql-client psql
+  apt update
 }
 
-db_cleanup() {
-  require settings
-  unset PGVERSION
-  settings save
+apt_cleanup() {
+  rm /etc/apt/sources.list.d/${SC}_backports.list /etc/apt/sources.list.d/${SC}_contrib.list
+  apt update
 }
 
-# Output a backup of the master db as an xz file on stdout
-db_master_backup() {
-  require master
-  master exec "cd /; which pg_dumpall &>/dev/null && su -c 'pg_dumpall -c | xz -c -6' postgres"
+apt_help() {
+  echo "apt setup: setup backport and contrib apt sources"
+  echo "apt cleanup: remove these sources"
 }
 
-# Output a backup of the local db as an xz file on stdout
-db_backup() {
-  syspackage xz xz-utils
-  syspackage postgresql-client pg_dumpall
-  su -c 'pg_dumpall -c | xz -c -6' postgres
+apt() {
+  subcall "$@"
 }
-
-# Restores a dump from stdin into the local postgres
-db_restore() {
-  syspackage unxz xz-utils
-  syspackage postgresql-client psql
-  su -c 'unxz -c | grep -Pv "^(?:CREATE|DROP|ALTER) ROLE postgres" | psql -q' postgres >/dev/null
-}
-
-db_enabled() {
-  if [ "$PGVERSION" ] && ls "/usr/lib/postgresql/$PGVERSION/bin/postgres" &>/dev/null && netstat -platun | grep -E ":5432.*LISTEN.*postgres" &>/dev/null; then
-    return 0
-  fi
-  return 1
-}
-
-db_settings() {
-  echo PGVERSION
-}
-
-db() {
-  subcall db "$@"
-}
-

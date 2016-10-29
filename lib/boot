@@ -28,54 +28,33 @@ LICENSE
 ###############################################################################
 
 
-db_setup() {
-  require settings
+boot_add_startup() {
+  local name="$1"; shift
+  cat > "/etc/systemd/system/$name.service" <<EOF
+[Unit]
+Description=Start $name module at boot
+After=network-online.target
 
-  syspackage postgresql pg_createcluster
-  PGVERSION="$(pg_lsclusters | tail -1 | cut -d' ' -f1)"
+[Service]
+Type=oneshot
+ExecStart=$SCBIN $name boot
+User=root
+Group=root
 
-  syspackage postgresql-contrib /usr/lib/postgresql/$PGVERSION/bin/pgdump
-  syspackage postgresql-client psql
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+  systemctl enable "$name.service"
 }
 
-db_cleanup() {
-  require settings
-  unset PGVERSION
-  settings save
+boot_del_startup() {
+  local name="$1"; shift
+  systemctl disable "$name.service"
+  rm -f "/etc/systemd/system/$name.service"
+  systemctl daemon-reload
 }
 
-# Output a backup of the master db as an xz file on stdout
-db_master_backup() {
-  require master
-  master exec "cd /; which pg_dumpall &>/dev/null && su -c 'pg_dumpall -c | xz -c -6' postgres"
+boot() {
+  subcall boot "$@"
 }
-
-# Output a backup of the local db as an xz file on stdout
-db_backup() {
-  syspackage xz xz-utils
-  syspackage postgresql-client pg_dumpall
-  su -c 'pg_dumpall -c | xz -c -6' postgres
-}
-
-# Restores a dump from stdin into the local postgres
-db_restore() {
-  syspackage unxz xz-utils
-  syspackage postgresql-client psql
-  su -c 'unxz -c | grep -Pv "^(?:CREATE|DROP|ALTER) ROLE postgres" | psql -q' postgres >/dev/null
-}
-
-db_enabled() {
-  if [ "$PGVERSION" ] && ls "/usr/lib/postgresql/$PGVERSION/bin/postgres" &>/dev/null && netstat -platun | grep -E ":5432.*LISTEN.*postgres" &>/dev/null; then
-    return 0
-  fi
-  return 1
-}
-
-db_settings() {
-  echo PGVERSION
-}
-
-db() {
-  subcall db "$@"
-}
-

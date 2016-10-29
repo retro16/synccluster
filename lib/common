@@ -89,14 +89,19 @@ has() {
 syspackage() {
   local package="$1"; shift
   local commands
-  if [ "$#" -gt 0 ]; then
-    commands=("$@")
-  else
-    commands=("$package")
+
+  if ! [ -e /etc/apt/sources.list.d/$SC.list ]; then
+    # Add required backports
+    cat > /etc/apt/sources.list.d/$SC.list
+  fi
+
+  if [ "$#" -eq 0 ]; then
+    apt install "$package"
+    return $?
   fi
 
   for c in "${commands[@]}"; do
-    if ! which "$c" &>/dev/null; then
+    if ! [ -e "$c" ] && ! which "$c" &>/dev/null; then
       apt install "$package"
       return $?
     fi

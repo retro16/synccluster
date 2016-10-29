@@ -45,7 +45,7 @@ EOF
 master_setup() {
   require settings
   syspackage openssh-client ssh ssh-keygen ssh-copy-id
-  syspackage rsync
+  syspackage rsync rsync
   settings prompt SCMASTER_USER "" "Enter master server user and host (empty if this host is the master):"
   if [ -z "$SCMASTER_USER" ]; then
     echo "This host is a master"
