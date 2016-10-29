@@ -1,0 +1,91 @@
+###############################################################################
+<<LICENSE
+
+The MIT License (MIT)
+
+Copyright (c) 2016 Jean-Matthieu COULON
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+LICENSE
+###############################################################################
+
+
+### Global functions ###
+
+# Display command-line help
+help() {
+  echo "$SC usage:"
+  echo "$SC subcommand [PARAMETERS]"
+}
+
+# Import a common module
+require() {
+  if [ -r "$SCLIBDIR/$1" ]; then
+    source "$SCLIBDIR/$1"
+  else
+    return 2
+  fi
+}
+
+# Postinstall script
+postinstall() {
+  echo "$SC installed"
+}
+
+
+# Main program
+if ! [ "$SCINSTALLED" ]; then
+  if [ "${ARGS[0]}" != "--install" ]; then
+    echo "$SC is not installed."
+    echo "Please install with the following command:"
+    echo "  # $SC --install"
+    exit 1
+  fi
+
+  # Install SC
+  install "$SCCURBIN" "$SCBIN"
+  rm -rf "$SCLIBDIR" || true
+  mkdir -p "$SCLIBDIR"
+  cp -r "$SCCURBINDIR/lib" "$SCLIBDIR"
+  chown -R root:root "$SCLIBDIR"
+  chmod -R u+rwX,g+rX,o+rX "$SCLIBDIR"
+
+  # Run post install script
+  postinstall
+fi
+
+
+# Command-line parsing
+if [ -z "${ARGS[0]}" ]; then
+  help
+  exit 1
+fi
+
+subcmd="${ARGS[0]}"
+ARGS=("${ARGS[@]:1}")
+
+if [ -r "$SCCMDDIR/$subcmd" ]; then
+  source "$SCCMDDIR/$subcmd"
+  $subcmd
+else
+  echo "$subcmd: subcommand not found"
+  exit 1
+fi
+
