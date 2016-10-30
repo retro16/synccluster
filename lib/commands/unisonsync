@@ -42,7 +42,7 @@ unisonsync_clean() {
   require settings
   rm -rf "$UNISON"
   unset UNISON
-  crontask remove unisonsync hourly
+  crontask del unisonsync hourly
   settings save
 }
 

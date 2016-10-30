@@ -28,23 +28,63 @@ LICENSE
 ###############################################################################
 
 
-crontask_add() {
-  local module="$1"; shift
-  local period="$1"; shift # period can be "hourly" "daily" "weekly" or "monthly".
-
-  cat > /etc/cron."$period"/"$SC"_"$module" <<EOF
-#!/bin/sh
-flock -w 30 -E 1 '/etc/cron.$period/$SC_$module' $SC $module cron $period
-EOF
-  chmod +x /etc/cron."$period"/"$SC"_"$module"
+upnpredir_setup() {
+  require settings
+  require crontask
+  require boot
+  syspackage miniupnpc upnpc
+  settings prompt UPNPPORTS "22 25 80 143 443 993" "List of ports to redirect to this host:"
+  boot add upnpredir
+  crontask add upnpredir hourly
+  settings save
 }
 
-crontask_del() {
-  local module="$1"; shift
-  local period="$1"; shift
-  rm /etc/cron."$period"/"$SC"_"$module"
+upnpredir_cleanup() {
+  require settings
+  if has crontask; then
+    crontask del upnpredir hourly
+  fi
+  if has boot; then
+    boot del upnpredir
+  fi
 }
 
-crontask() {
-  subcall crontask "$@"
+upnpredir_enabled() {
+  if [ "$UPNPPORTS" ]; then
+    return 0
+  fi
+  return 1
+}
+
+upnpredir_ready() {
+  if upnpredir enabled && has boot && boot has upnpredir; then
+    return 0
+  fi
+  return 1
+}
+
+upnpredir_refresh() {
+  for p in $UPNPPORTS; do
+    if ! upnpc -r $p tcp $p udp; then
+      upnpc -d $p tcp
+      upnpc -d $p udp
+      upnpc -r $p tcp $p udp
+    fi
+  done
+}
+
+upnpredir_cron() {
+  upnpredir refresh
+}
+
+upnpredir_boot() {
+  upnpredir refresh
+}
+
+upnpredir_settings() {
+  echo UPNPPORTS
+}
+
+upnpredir() {
+  subcall upnpredir "$@"
 }

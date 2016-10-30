@@ -54,7 +54,7 @@ pullbackup_add() {
 }
 
 # Remove a path
-pullbackup_remove() {
+pullbackup_del() {
   require settings
   SCBACKUP_LIST="$(sed -e "s/ $1 //" <<< "$SCBACKUP_LIST")"
 }

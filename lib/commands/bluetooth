@@ -28,29 +28,31 @@ LICENSE
 ###############################################################################
 
 
-# Synchronize quickly with the server (users, unison)
-sync_quick() {
-  if ! has master; then
-    # Don't synchronize if there is no master
-    exit 0
-  fi
-
-  if has user; then
-    user cron
-  fi
-
-  if has unisonsync; then
-    unisonsync cron
-  fi
+bluetooth_setup() {
+  syspackage bluetooth bluetoothctl
+  require boot
+  boot add bluetooth
 }
 
-sync_full() {
-  sync quick
-  if has db; then
-    db master_backup | db restore
+bluetooth_ready() {
+  if ! bluetooth enabled || ! has boot || ! boot has bluetooth; then
+    return 1
   fi
+  return 0
 }
 
-sync() {
-  subcall sync "$@"
+bluetooth_enabled() {
+  if ! which bluetoothctl &>/dev/null; then
+    return 1
+  fi
+  return 0
 }
+
+bluetooth_boot() {
+  /usr/bin/bluetoothctl <<< "power on"
+}
+
+bluetooth() {
+  subcall bluetooth "@"
+}
+

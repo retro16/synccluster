@@ -28,23 +28,25 @@ LICENSE
 ###############################################################################
 
 
-crontask_add() {
-  local module="$1"; shift
-  local period="$1"; shift # period can be "hourly" "daily" "weekly" or "monthly".
-
-  cat > /etc/cron."$period"/"$SC"_"$module" <<EOF
-#!/bin/sh
-flock -w 30 -E 1 '/etc/cron.$period/$SC_$module' $SC $module cron $period
-EOF
-  chmod +x /etc/cron."$period"/"$SC"_"$module"
+utils_setup() {
+  syspackage screen screen
+  syspackage ntp ntpq
+  syspackage hdparm hdparm
+  syspackage iftop iftop
+  syspackage smartmontools smartctl
 }
 
-crontask_del() {
-  local module="$1"; shift
-  local period="$1"; shift
-  rm /etc/cron."$period"/"$SC"_"$module"
+utils_ready() {
+  if ! which screen &>/dev/null \
+  || ! which ntpq &>/dev/null \
+  || ! which hdparm &>/dev/null \
+  || ! which iftop &>/dev/null \
+  || ! which smartctl &>/dev/null; then
+    return 1
+  fi
+  return 0
 }
 
-crontask() {
-  subcall crontask "$@"
+utils() {
+  subcall utils "@"
 }

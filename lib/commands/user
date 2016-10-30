@@ -59,7 +59,7 @@ EOF
 }
 
 user_cleanup() {
-  crontask remove user hourly
+  crontask del user hourly
 }
 
 user_cron() {
