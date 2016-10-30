@@ -86,6 +86,13 @@ master_enabled() {
   return 0
 }
 
+master_ready() {
+  if master enabled; then
+    return 0
+  fi
+  return 1
+}
+
 master_getfile() {
   master check
   local source="$1"; shift

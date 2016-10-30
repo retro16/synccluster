@@ -28,29 +28,28 @@ LICENSE
 ###############################################################################
 
 
-# Temporary files management
-
-temp_dir() {
-  TEMP_FILE="$(mktemp -d)"
-  trap "rm -rf '$TEMP_FILE'" EXIT
+nfssrv_setup() {
+  syspackage nfs-kernel-server rpc.nfsd
+  cat > /etc/exports <<EOF
+/home 192.168.0.0/24(rw,sync,no_subtree_check,no_root_squash,crossmnt,fsid=0)
+EOF
+  exportfs -r
 }
 
-temp_file() {
-  TEMP_FILE="$(mktemp)"
-  trap "rm -rf '$TEMP_FILE'" EXIT
+nfssrv_enabled() {
+  if [ -e /etc/exports ] && which rpc.nfsd &>/dev/null; then
+    return 0
+  fi
+  return 1
 }
 
-temp_release() {
-  rm -rf "$TEMP_FILE"
-  trap EXIT
-  unset TEMP_FILE
+nfssrv_ready() {
+  if nfssrv enabled; then
+    return 0
+  fi
+  return 1
 }
 
-temp_forget() {
-  trap EXIT
-  unset TEMP_FILE
-}
-
-temp() {
-  subcall temp "$@"
+nfssrv() {
+  subcall nfssrv "$@"
 }

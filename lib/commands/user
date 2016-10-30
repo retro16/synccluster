@@ -108,7 +108,7 @@ user_pull() {
       if grep -E "^$user:" "$T/passwd.new" &>/dev/null; then
         # Update unison profile
         if has unisonsync; then
-          unisonsync adduser "$user" "$homedir"
+          unisonsync adduser "${SCMASTER_USER#*@}" "$user" "$homedir"
         fi
       fi
     fi

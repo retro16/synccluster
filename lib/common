@@ -49,7 +49,7 @@ subcall() {
 # Import a common module
 require() {
   local mod="$1"; shift
-  local setup="$1"; shift
+  local setup="$1"; shift || true
 
   if [[ " $SCMODULES " != *" $mod "* ]]; then
     if [ -r "$SCLIBDIR/$mod" ]; then
@@ -76,17 +76,19 @@ require() {
 
 # Import an optional module
 has() {
-  if [[ " $SCMODULES " == *" $1 "* ]]; then
+  local mod="$1"; shift
+
+  if [[ " $SCMODULES " == *" $mod "* ]]; then
     # Already loaded
     true
-  elif [ -r "$SCLIBDIR/$1" ]; then
-    source "$SCLIBDIR/$1"
-  elif [ -r "$SCCMDDIR/$1" ]; then
-    source "$SCCMDDIR/$1"
+  elif [ -r "$SCLIBDIR/$mod" ]; then
+    source "$SCLIBDIR/$mod"
+  elif [ -r "$SCCMDDIR/$mod" ]; then
+    source "$SCCMDDIR/$mod"
   else
     return 2
   fi
-  SCMODULES="$SCMODULES $1"
+  SCMODULES="$SCMODULES $mod"
   if [ "$(type -t "${mod}_enabled")" = "function" ]; then
     if ! "${mod}_enabled"; then
       # The module does not want to exist !
@@ -100,6 +102,47 @@ has() {
     fi
   fi
   return 0
+}
+
+# Call a method on all commands matching filter
+broadcall() {
+  local filter="$1"; shift # "all", "enabled" or "ready"
+  local function="$1"; shift
+  for f in "$SCCMDDIR"/*; do
+    local mod="$(basename "$f")"
+    source "$f"
+    if [ "$filter" = "all" ] || [ "$(type -t "${mod}_$filter")" != "function" ] || "$mod" "$filter"; then
+      "$mod" "$function" "$@"
+    fi
+  done
+}
+
+# Return the list of all commands.
+# takes an optional filter function
+cmdlist() {
+  local filter="$1"; shift || true
+
+  for f in "$SCCMDDIR"/*; do
+    local mod="$(basename "$f")"
+    if [ "$filter" ]; then
+      source "$f"
+      if [ "$(type -t "${mod}_$filter")" != "function" ] || "$mod" "$filter"; then
+        echo "$mod"
+      fi
+    else
+      echo "$mod"
+    fi
+  done
+}
+
+# Optionally call a function. Returns true if function missing
+optcall() {
+  local mod="$1"; shift
+  local function="$1"; shift
+
+  if has "$mod" && [ "$(type -t "${mod}_$function")" = "function" ]; then
+    "$mod" "$function" "$@"
+  fi
 }
 
 # Check that command-lines are available, and if some are missing, install the corresponding system package

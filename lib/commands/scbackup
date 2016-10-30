@@ -28,46 +28,91 @@ LICENSE
 ###############################################################################
 
 
-pullbackup_setup() {
+scbackup_setup() {
   require crontask
   require settings
   syspackage rsync rsync
-  settings prompt PULLBACKUP_ROOT "/home/.local/backup" "Enter the root path for remote backup:"
-  if ! [ -d "$PULLBACKUP_ROOT" ]; then
+  settings prompt SCBACKUP_ROOT "/home/.local/backup" "Enter the root path for remote backup:"
+  if ! [ -d "$SCBACKUP_ROOT" ]; then
     echo "Invalid backup root path"
     exit 2
   fi
   settings save
-  crontask add pullbackup
+  crontask add scbackup
 }
 
-pullbackup_clean() {
+scbackup_clean() {
   require settings
-  unset PULLBACKUP_ROOT
+  unset SCBACKUP_ROOT
   settings save
 }
 
 # Add a new path
-pullbackup_add() {
+scbackup_add() {
   require settings
-  PULLBACKUP_LIST="$PULLBACKUP_LIST $1 "
+  SCBACKUP_LIST="$SCBACKUP_LIST $1 "
   settings save
 }
 
 # Remove a path
-pullbackup_del() {
+scbackup_del() {
   require settings
-  PULLBACKUP_LIST="$(sed -e "s/ $1 //" <<< "$PULLBACKUP_LIST")"
+  SCBACKUP_LIST="$(sed -e "s/ $1 //" <<< "$SCBACKUP_LIST")"
 }
 
-pullbackup_enabled() {
-  if [ -z "$PULLBACKUP_ROOT" ] || ! [ -d "$PULLBACKUP_ROOT" ] || [ -z "${PULLBACKUP_LIST}" ]; then
+# Do a backup of one host
+scbackup_backup() {
+  local host="$1"; shift || host="localhost"
+
+  require sshlink
+  sshlink sc "$host" cmdlist ready | while read cmd; do
+    files="$(sshlink sc "$host" $cmd files)"
+    dbs="$(sshlink sc "$host" $cmd db)"
+    if ! [ -d "$SCBACKUP_ROOT/$host/fs" ]; then
+      mkdir -p "$SCBACKUP_ROOT/$host/fs"
+    fi
+    sshlink getfiles "$host" "$SCBACKUP_ROOT/$host/fs" <<< "$files"
+    if [ "$dbs" ]; then
+      if ! [ -d "$SCBACKUP_ROOT/$host/db" ]; then
+        mkdir -p "$SCBACKUP_ROOT/$host/db"
+      fi
+      echo "$dbs" | while read d; do
+        sshlink sc "$host" db backup "$d" > "$SCBACKUP_ROOT/$host/db/$d.sql.xz"
+      done
+    fi
+  done
+}
+
+scbackup_restore() {
+  local backup="$SCBACKUP_ROOT/$1"; shift
+
+  if ! [ -d "$backup" ]; then
+    echo "Error: could not find backup $backup"
+    exit 2
+  fi
+
+  for mod in "$@"; do
+    require "$mod" setup
+    "$mod" files | while read -r f; do
+      [ -d "$(dirname "$f")" ] || mkdir -p "(dirname "$f")"
+      rsync -aP "$backup/fs/$f" "$f"
+    done
+    local db="$(optcall "$mod" db)"
+    if [ "$db" ]; then
+      require db setup
+      db restore "$backup/db/$mod.sql.xz"
+    fi
+  done
+}
+
+scbackup_enabled() {
+  if [ -z "$SCBACKUP_ROOT" ] || ! [ -d "$SCBACKUP_ROOT" ] || [ -z "${SCBACKUP_LIST}" ]; then
     return 1
   fi
   return 0
 }
 
-pullbackup_exclude_list() {
+scbackup_exclude_list() {
   cat <<EOF
 - *.o
 - .*.swp
@@ -83,7 +128,24 @@ pullbackup_exclude_list() {
 - \$RECYCLE.BIN
 - Crash Reports
 - /**/Documents/HTC/**
-+ /etc/**
++ /etc
++ /etc/apt
++ /etc/apt/sources.list.d
++ /etc/apt/sources.list.d/**
++ /etc/aliases
++ /etc/mailname
++ /etc/cron.d
++ /etc/cron.d/**
++ $CLOUDDIR
++ $CLOUDDIR/**
++ $KODIDIR
++ $KODIDIR/**
++ $WWWDIR
++ $WWWDIR/**
++ $MAILDIR
++ $MAILDIR/**
++ $UNISON
++ $UNISON/**
 + /home
 + /home/[a-zA-Z0-9]*
 + /home/[a-zA-Z0-9]*/Bureau
@@ -132,23 +194,24 @@ pullbackup_exclude_list() {
 EOF
 }
 
-pullbackup_cron() {
+scbackup_cron() {
   require temp
   local exclude="$(temp newfile)"
-  pullbackup exclude_list > "$exclude"
-  for s in $PULLBACKUP_LIST; do
-    local target="$PULLBACKUP_ROOT/$(tr ':' '/' <<< "$s")/fs"
+  scbackup exclude_list > "$exclude"
+  for s in $SCBACKUP_LIST; do
+    local target="$SCBACKUP_ROOT/$(tr ':' '/' <<< "$s")/fs"
     [ -d "$target" ] || mkdir -p "$target"
     rsync -azP --delete --delete-excluded --include-from="$exclude" "$s/" "$target/"
   done
   temp release
 }
 
-pullbackup_settings() {
-  echo PULLBACKUP_ROOT
-  echo PULLBACKUP_LIST
+scbackup_settings() {
+  echo SCBACKUP_ROOT
+  echo SCBACKUP_LIST
 }
 
-pullbackup() {
-  subcall pullbackup "$@"
+scbackup() {
+  subcall scbackup "$@"
 }
+

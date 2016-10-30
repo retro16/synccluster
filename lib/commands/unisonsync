@@ -35,6 +35,8 @@ unisonsync_setup() {
   [ -d "$UNISON" ] || mkdir -p "$UNISON"
   unisonsync common_profile > "$UNISON/_common.prf"
   crontask add unisonsync hourly
+  crontask add unisonsync daily
+  crontask add unisonsync weekly
   settings save
 }
 
@@ -43,29 +45,64 @@ unisonsync_clean() {
   rm -rf "$UNISON"
   unset UNISON
   crontask del unisonsync hourly
+  crontask del unisonsync daily
+  crontask del unisonsync weekly
   settings save
 }
 
+unisonsync_add() {
+  local host="$1"; shift
+  local path="$1"; shift
+  local period="$1"; shift
+
+  cat > "$UNISON/${period}_${host}$(tr -c '[a-zA-Z0-9]' '_' <<< "$path").prf" << EOF
+include _common
+root = $path
+root = ssh://root@$host/$path
+EOF
+}
+
+unisonsync_del() {
+  local host="$1"; shift
+  local path="$1"; shift
+  local period="$1"; shift
+
+  rm "$UNISON/${period}_${host}$(tr -c '[a-zA-Z0-9]' '_' <<< "$path").prf"
+}
+
 unisonsync_adduser() {
+  local host="$1"; shift
   local user="$1"; shift
   local homedir="$1"; shift
 
   cat > "$UNISON/hourly_$user.prf" << EOF
 include _common
-root = /home/$user
-root = ssh://$SCMASTER_USER/$homedir
+root = $homedir
+root = ssh://root@$host/$homedir
 EOF
 }
 
 unisonsync_deluser() {
+  local user="$1"; shift
   rm -f "$UNISON/hourly_$user.prf"
 }
 
 unisonsync_enabled() {
-  if has master && [ "$UNISON" ]; then
+  if [ "$UNISON" ]; then
     return 0
   fi
   return 1
+}
+
+unisonsync_ready() {
+  if unisonsync enabled && [ -e "$UNISON/_common.prf" ]; then
+    return 0
+  fi
+  return 1
+}
+
+unisonsync_files() {
+  ls "$UNISON"
 }
 
 unisonsync_cron() {

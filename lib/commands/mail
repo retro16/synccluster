@@ -48,6 +48,13 @@ mail_setup() {
   settings save
 }
 
+mail_files() {
+  echo "/etc/postfix/main.cf"
+  echo "/etc/aliases"
+  echo "/etc/procmailrc"
+  echo "/etc/dovecot/dovecot.conf"
+}
+
 mail_postfix_conf() {
   cat <<EOF
 alias_database = hash:/etc/aliases

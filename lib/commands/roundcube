@@ -37,11 +37,32 @@ roundcube_setup() {
   roundcube install
 }
 
+roundcube_cleanup() {
+  require www
+  require db
+
+  rm -rf "$WWWDIR/roundcubemail" "$WWWDIR/roundcubemail-$roundcube_version"
+  www delconf roundcubemail
+  db del roundcubemail
+}
+
 roundcube_ready() {
-  if has www && [ -e "$WWWDIR/roundcubemail-$roundcube_version" ] && [ "$(readlink -fs "$WWWDIR/roundcubemail)" = "$WWWDIR/roundcubemail-$roundcube_version" ] && www hasconf roundcubemail; then
+  if has www \
+  && [ -e "$WWWDIR/roundcubemail-$roundcube_version" ] \
+  && [ "$(readlink -fs "$WWWDIR/roundcubemail")" = "$WWWDIR/roundcubemail-$roundcube_version" ] \
+  && www hasconf roundcubemail; then
     return 0
   fi
   return 1
+}
+
+roundcube_files() {
+  require www
+  echo "$WWWDIR/roundcubemail-$roundcube_version/config/config.inc.php"
+}
+
+roundcube_db() {
+  echo roundcubemail roundcubemail
 }
 
 roundcube_download() {
@@ -63,7 +84,8 @@ roundcube_download() {
 
 roundcube_install() {
   roundcube create_db
-  git_get https://github.com/blind-coder/rcmcarddav.git "$WWWDIR/plugins/carddav"
+  roundcube conf > "$WWWDIR/roundcubemail/config/config.inc.php"
+  git_get https://github.com/blind-coder/rcmcarddav.git "$WWWDIR/roundcubemail/plugins/carddav"
   chown -R www-data:www-data "$WWWDIR/roundcubemail/logs"
   chown -R www-data:www-data "$WWWDIR/roundcubemail/temp"
 }
@@ -73,7 +95,7 @@ roundcube_create_db() {
   require settings
   settings prompt ROUNDCUBE_PASSWORD "" "Roundcube user database password"
 
-  db create roundcubemail "$ROUNDCUBE_PASSWORD"
+  db add roundcubemail "$ROUNDCUBE_PASSWORD"
   db sql roundcubemail "$ROUNDCUBE_PASSWORD" roundcubemail < "$WWWDIR/roundcubemail/SQL/postgres.initial.sql"
 
   settings save

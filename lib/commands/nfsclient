@@ -28,29 +28,40 @@ LICENSE
 ###############################################################################
 
 
-# Temporary files management
-
-temp_dir() {
-  TEMP_FILE="$(mktemp -d)"
-  trap "rm -rf '$TEMP_FILE'" EXIT
+nfsclient_setup() {
+  syspackage nfs-common nfsstat
+  require temp
+  require master setup
+  local t="$(temp file)"
+  grep -v ' nfs4 ' /etc/fstab > "$t"
+  cat >> "$t" <<EOF
+${SCMASTER_USER#*@}:/ /home nfs4 rw,rsize=131072,wsize=131072 0 0
+EOF
+  mv "$t" /etc/fstab
+  temp forget
 }
 
-temp_file() {
-  TEMP_FILE="$(mktemp)"
-  trap "rm -rf '$TEMP_FILE'" EXIT
+nfsclient_cleanup() {
+  local t="$(temp file)"
+  grep -v ' nfs4 ' /etc/fstab > "$t"
+  mv "$t" /etc/fstab
+  temp forget
 }
 
-temp_release() {
-  rm -rf "$TEMP_FILE"
-  trap EXIT
-  unset TEMP_FILE
+nfsclient_enabled() {
+  if grep ' nfs4 ' /etc/fstab &>/dev/null; then
+    return 0
+  fi
+  return 1
 }
 
-temp_forget() {
-  trap EXIT
-  unset TEMP_FILE
+nfsclient_ready() {
+  if nfsclient enabled; then
+    return 0
+  fi
+  return 1
 }
 
-temp() {
-  subcall temp "$@"
+nfsclient() {
+  subcall nfsclient "$@"
 }

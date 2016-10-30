@@ -51,30 +51,33 @@ db_cleanup() {
   settings save
 }
 
-# Output a backup of the master db as an xz file on stdout
-db_master_backup() {
-  require master
-  master exec "cd /; which pg_dumpall &>/dev/null && su -c 'pg_dumpall -c | xz -c -6' postgres"
-}
-
 # Output a backup of the local db as an xz file on stdout
 db_backup() {
+  local user="$1"; shift
+  local database="$1"; shift || database="$user"
   syspackage xz xz-utils
-  syspackage postgresql-client pg_dumpall
-  su -c 'pg_dumpall -c | xz -c -6' postgres
+  syspackage postgresql-client pg_dump pg_dumpall
+  pushd / &>/dev/null
+  su -c "pg_dumpall --roles-only | grep -P '^(?:CREATE|DROP|ALTER) ROLE $user' " postgres
+  echo "DROP DATABASE IF EXISTS $database;"
+  echo "CREATE DATABASE $database OWNER=$user;"
+  su -c "pg_dump -c $database | xz -c -6" postgres
+  popd &>/dev/null
 }
 
-# Restores a dump from stdin into the local postgres
+# Restores a xz backup from stdin into the local postgres
 db_restore() {
   syspackage unxz xz-utils
   syspackage postgresql-client psql
-  su -c 'unxz -c | grep -Pv "^(?:CREATE|DROP|ALTER) ROLE postgres" | psql -q' postgres >/dev/null
+  pushd / &>/dev/null
+  su -c 'unxz -c | psql -q' postgres >/dev/null
+  popd &>/dev/null
 }
 
-db_create() {
+db_add() {
   local user="$1"; shift
   local password="$1"; shift
-  local database="$1"; shift
+  local database="$1"; shift || database="$user"
 
   pushd / &>/dev/null
   su -c "psql -c 'DROP DATABASE IF EXISTS $database;'" postgres
@@ -84,9 +87,9 @@ db_create() {
   popd &>/dev/null
 }
 
-db_drop() {
+db_del() {
   local user="$1"; shift
-  local database="$1"; shift
+  local database="$1"; shift || database="$user"
   pushd / &>/dev/null
   su -c "psql -c 'DROP DATABASE IF EXISTS $database;'" postgres
   su -c "psql -c 'DROP ROLE IF EXISTS $user;'" postgres
