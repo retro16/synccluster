@@ -41,14 +41,13 @@ EOF
 }
 
 user_setup() {
-  require master
-  master setup
+  if has master; then
 
-  require unisonsync
-  unisonsync setup
+    require unisonsync setup
 
-  require crontask
-  crontask add user hourly
+    require crontask
+    crontask add user hourly
+  fi
 
   syspackage sudo
   # Enable passwordless sudo
@@ -59,7 +58,9 @@ EOF
 }
 
 user_cleanup() {
-  crontask del user hourly
+  if has master; then
+    crontask del user hourly
+  fi
 }
 
 user_cron() {
@@ -164,13 +165,25 @@ user_pull() {
       ;;
   esac
 
-
   temp release
   unset T
 }
 
 user_enabled() {
+  if ! [ -e /etc/sudoers.d/"$SC" ]; then
+    return 1
+  fi
   if has master; then
+    if crontask has user hourly; then
+      return 0
+    fi
+    return 1
+  fi
+  return 0
+}
+
+user_ready() {
+  if user enabled; then
     return 0
   fi
   return 1

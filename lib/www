@@ -56,18 +56,21 @@ www_setup() {
 www_cleanup() {
   require settings
   unset WWWDIR
+  rm "/etc/apache2/conf-available/${SC}_"*.conf
+  rm "/etc/apache2/conf-enabled/${SC}_"*.conf
   settings save
 }
 
 # Put standard input into an apache conf file and enable it
 www_addconf() {
-  local target="/etc/apache2/conf-available/$1.conf"
+  local conf="$1"; shift
+  local target="/etc/apache2/conf-available/${SC}_$conf.conf"
   cat > "$target"
   a2enconf "$1"
 }
 
 www_hasconf() {
-  if [ -e "/etc/apache2/conf-enabled/$1.conf" ]; then
+  if [ -e "/etc/apache2/conf-enabled/${SC}_$conf.conf" ]; then
     return 0
   fi
   return 1
@@ -75,9 +78,9 @@ www_hasconf() {
 
 www_configure_phpini() {
   local target="$1"; shift
-  sed -i 's/[ ;]*max_execution_time *= .*/max_execution_time = 600/' "$target"
-  sed -i 's/[ ;]*memory_limit *= .*/memory_limit = 256M/' "$target"
-  sed -i 's/[ ;]*post_max_size *= .*/post_max_size = 64M/' "$target"
+  sed -i 's/[ ;]*max_execution_time *= .*/max_execution_time = 1200/' "$target"
+  sed -i 's/[ ;]*memory_limit *= .*/memory_limit = 512M/' "$target"
+  sed -i 's/[ ;]*post_max_size *= .*/post_max_size = 256M/' "$target"
   sed -i 's/[ ;]*upload_max_filesize *= .*/upload_max_filesize = 2048M/' "$target"
   sed -i 's/[ ;]*date.timezone *= .*/date.timezone = Europe\/Paris/' "$target"
   sed -i 's/[ ;]*upload_max_filesize *= .*/upload_max_filesize = 2048M/' "$target"
