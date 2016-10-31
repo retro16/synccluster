@@ -30,6 +30,7 @@ LICENSE
 
 www_setup() {
   require settings
+  require nginx setup
 
   syspackage apache2 apache2ctl
   syspackage libapache2-mod-php5 /usr/lib/apache2/modules/libphp5.so

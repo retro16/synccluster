@@ -29,20 +29,21 @@ LICENSE
 
 
 sshlink_add() {
-  local host="$1"; shift
-  syspackage openssh-client ssh ssh-keygen ssh-copy-id
-  syspackage rsync rsync
+  local host="$1"; shift || host=localhost
+  if [ "$host" != localhost ]; then
+    syspackage openssh-client ssh ssh-keygen ssh-copy-id
+    syspackage rsync rsync
 
-  if ! [ -r "$HOME/.ssh/id_rsa" ]; then
-    ssh-keygen
+    if ! [ -r "$HOME/.ssh/id_rsa" ]; then
+      ssh-keygen
+    fi
+
+    ssh-copy-id "$host"
+    if ! sshlink check "$host"; then
+      echo "Link to $host failed"
+      exit 1
+    fi
   fi
-
-  ssh-copy-id "$host"
-  if ! sshlink check "$host"; then
-    echo "Link to $host failed"
-    exit 1
-  fi
-
   echo "Linked successfully to $host"
 }
 
@@ -76,6 +77,7 @@ sshlink_sc() {
   fi
 }
 
+# Used by sshlink sc
 sshlink_scremote() {
   local mod="$1"; shift
   require "$mod"
@@ -88,7 +90,30 @@ sshlink_getfiles() {
   local host="$1"; shift || host=localhost
   local target="$1"; shift || target="/"
   if [ "$host" = localhost ] && [ "$target" = "/" ]; then return 0; fi
-  rsync -az --delete --files-from=- "$host":/ "$target"
+  require temp
+  filter="$(temp file)"
+  sshlink_exclude_list > "$filter"
+  rsync -az --delete --files-from=- --filter=". $filter" "$host":/ "$target"
+  temp release
+}
+
+sshlink_exclude_list() {
+  cat <<EOF
+- *.o
+- .*.swp
+- [cC]ache/
+- .[cC]ache/
+- [lL]ock
+- .parentlock
+- *.nps
+- *~
+- .*~
+- .[tT]rash*
+- [tT]humbs.db
+- \$RECYCLE.BIN
+- Crash Reports
+- /**/Documents/HTC/**
+EOF
 }
 
 sshlink_putfiles() {

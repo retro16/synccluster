@@ -30,6 +30,7 @@ LICENSE
 
 mail_setup() {
   require settings
+  require ssl setup
 
   syspackage postfix postfix
   syspackage dovecot-imapd doveadm
@@ -44,6 +45,12 @@ mail_setup() {
   mail postfix_conf > "/etc/postfix/main.cf"
   mail procmail_conf > "/etc/procmailrc"
   mail dovecot_conf > "/etc/dovecot/dovecot.conf"
+
+  systemctl enable postfix
+  systemctl start postfix
+
+  systemctl enable dovecot
+  systemctl start dovecot
 
   settings save
 }
@@ -80,8 +87,8 @@ smtpd_sasl_local_domain = \$myorigin
 smtpd_sasl_path = private/auth
 smtpd_sasl_security_options = noanonymous
 smtpd_sasl_type = dovecot
-smtpd_tls_cert_file = /etc/ssl/certs/ssl-cert-snakeoil.pem
-smtpd_tls_key_file = /etc/ssl/private/ssl-cert-snakeoil.key
+smtpd_tls_cert_file = $SSLCERT
+smtpd_tls_key_file = $SSLKEY
 smtpd_tls_session_cache_database = btree:\${data_directory}/smtpd_scache
 smtpd_use_tls = yes
 EOF
