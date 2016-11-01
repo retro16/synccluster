@@ -76,6 +76,10 @@ www_hasconf() {
   return 1
 }
 
+www_delconf() {
+  rm -f "/etc/apache2/conf-available/${SC}_$conf.conf" "/etc/apache2/conf-enabled/${SC}_$conf.conf"
+}
+
 www_configure_phpini() {
   local target="$1"; shift
   sed -i 's/[ ;]*max_execution_time *= .*/max_execution_time = 1200/' "$target"

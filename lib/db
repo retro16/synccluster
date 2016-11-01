@@ -99,7 +99,7 @@ db_del() {
 db_sql() {
   local user="$1"; shift
   local password="$1"; shift
-  local database="$1"; shift
+  local database="$1"; shift || database="$user"
 
   pushd / &>/dev/null
   PGPASSWORD="${password}" psql -U "$user" -h localhost -p 5432 "$database"

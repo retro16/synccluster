@@ -1,0 +1,140 @@
+#!/bin/bash
+###############################################################################
+<<LICENSE
+
+The MIT License (MIT)
+
+Copyright (c) 2016 Jean-Matthieu COULON
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+LICENSE
+###############################################################################
+
+
+owncloud_version="9.1.1"
+owncloud_url="https://download.owncloud.org/community/owncloud-${owncloud_version}.tar.bz2"
+
+owncloud_setup() {
+  require www setup
+  require temp
+  require settings
+
+  settings prompt OWNCLOUD_PASSWORD "" "Owncloud admin and database password:"
+  settings prompt CLOUDDIR "/home/.local/cloud" "Owncloud storage path:"
+
+  if ! [ -d "$CLOUDDIR" ]; then
+    echo "$CLOUDDIR not found. Aborting."
+    exit 2
+  fi
+
+  owncloud get
+  owncloud create_db
+  owncloud init
+  owncloud config
+
+  chown -R www-data:www-data "$CLOUDDIR"
+  chown -R root:www-data "$CLOUDDIR/.htaccess"
+}
+
+owncloud_cleanup() {
+  www delconf owncloud
+  rm -rf "$WWWDIR/owncloud"
+  db del owncloud "$OWNCLOUD_PASSWORD"
+}
+
+owncloud_get() {
+  tmp="$(temp file)"
+  wget -O"$tmp" "$owncloud_url"
+
+  owncloud_conf | www addconf owncloud
+  tar -C "$WWWDIR" -xvjf "$tmp"
+  chown -R www-data:www-data "$WWWDIR/owncloud/apps"
+  chown -R www-data:www-data "$WWWDIR/owncloud/config"
+  chown -R www-data:www-data "$WWWDIR/owncloud/themes"
+  chown -R root:www-data "$WWWDIR/owncloud/.htaccess"
+
+  temp release
+}
+
+owncloud_create_db() {
+  require db setup
+
+  db add owncloud "$OWNCLOUD_PASSWORD"
+}
+
+owncloud_init() {
+  owncloud occ maintenance:install --database pgsql --database-name owncloud --database-host localhost --database-user owncloud --database-pass "${OWNCLOUD_PASSWORD}" --admin-user admin --admin-pass "${OWNCLOUD_PASSWORD}" --data-dir "$CLOUDDIR"
+}
+
+owncloud_config() {
+  tmp="$(temp file)"
+  head -n -1 "$WWWDIR/owncloud/config/config.php" > "$tmp"
+  cat >> "$tmp" <<EOF
+  'memcache.local' => '\\\\OC\\\\Memcache\\\\APCu',
+  'user_backends' => 
+  array (
+    0 => 
+    array (
+      'class' => 'OC_User_IMAP',
+      'arguments' => 
+      array (
+        0 => '{localhost:143/imap/tls/novalidate-cert}INBOX',
+      ),
+    ),
+  ),
+);
+EOF
+  sed -i "s/    0 => 'localhost',/    0 => '$DOMAIN',/" "$tmp"
+  chown www-data:www-data "$tmp"
+  mv "$tmp" "$WWWDIR/owncloud/config/config.php"
+  temp forget
+}
+
+owncloud_occ() {
+  trap "sed -i 's;^\\(www-data:.*:\\).*;\\1/usr/sbin/nologin;' /etc/passwd" EXIT
+  sed -i 's;^\(www-data:.*:\).*;\1/bin/bash;' /etc/passwd
+
+  pushd "$WWWDIR/owncloud" &>/dev/null
+  su -c "php occ $*" www-data
+  popd &>/dev/null
+
+  sed -i 's;^\\(www-data:.*:\\).*;\\1/usr/sbin/nologin;' /etc/passwd
+  trap EXIT
+}
+
+owncloud_db() {
+  owncloud owncloud
+}
+
+owncloud_files() {
+  cat <<EOF
+$WWWDIR/owncloud/config/config.php
+$CLOUDDIR
+EOF
+}
+
+owncloud_settings() {
+  echo OWNCLOUD_PASSWORD
+  echo CLOUDDIR
+}
+
+owncloud() {
+  subcall owncloud "$@"
+}

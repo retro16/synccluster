@@ -48,5 +48,5 @@ utils_ready() {
 }
 
 utils() {
-  subcall utils "@"
+  subcall utils "$@"
 }
