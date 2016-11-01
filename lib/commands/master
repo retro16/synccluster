@@ -68,6 +68,17 @@ master_setup() {
     exit 1
   fi
 
+  while [ "$SCMASTER_ROAMING" != "y" ] && [ "$SCMASTER_ROAMING" != "n" ]; do
+    echo "Is this a roaming machine (y/n) ?"
+    read SCMASTER_ROAMING
+  done
+
+  if [ "$SCMASTER_ROAMING" = "y" ]; then
+    SCMASTER_ROAMING=1
+  else
+    SCMASTER_ROAMING=""
+  fi
+
   settings save
   echo "Linked successfully to $SCMASTER_USER"
 }
@@ -76,6 +87,7 @@ master_setup() {
 master_clean() {
   require settings
   unset SCMASTER_USER
+  unset SCMASTER_ROAMING
   settings save
 }
 
@@ -125,6 +137,7 @@ master_status() {
 
 master_settings() {
   echo SCMASTER_USER
+  echo SCMASTER_ROAMING
 }
 
 master() {

@@ -42,9 +42,6 @@ EOF
 
 user_setup() {
   if has master; then
-
-    require unisonsync setup
-
     require crontask
     crontask add user hourly
   fi
@@ -63,14 +60,78 @@ user_cleanup() {
   fi
 }
 
+user_add() {
+  local login="$1"; shift
+  local group="$1"; shift || group="$login"
+
+  if has master; then
+    master sc user add "$login" "$group"
+    user pull
+  else
+    newuid="$(cut -d: -f3 /etc/passwd | grep -E '100[0-9][0-9]'|sort -nr)"
+    [ "$newuid" ] && newuid="$((newuid + 1))" || newuid=10000
+    useradd -c '' -d "/home/$login" -m -N -u "$newuid" -g "$group" "$login"
+  fi
+}
+
+user_del() {
+  local login="$1"; shift
+
+  if has master; then
+    master sc user del "$login"
+    user pull
+  else
+    userdel -r "$login"
+  fi
+}
+
+# Import a user from the master on a roaming machine
+user_import() {
+  local login="$1"; shift
+  if grep -E "^$login:" /etc/passwd; then return 0; fi
+  if ! has master; then return 0; fi
+
+  master sc user export "$login" | IFS=: read uid gid
+
+  useradd -c '' -d "/home/$login" -m -N -u "$uid" -g "$gid" "$login"
+
+  if has unisonsync; then
+    unisonsync adduser "${SCMASTER_USER#*@}" "$login" "/home/$login"
+    unisonsync cron
+  fi
+
+  # Update the password and other details
+  user pull
+}
+
+user_export() {
+  local login="$1"; shift
+  grep -E "^$login:" /etc/passwd | cut -d: -f3-4
+}
+
+# Free a user from a roaming machine
+user_free() {
+  local login="$1"; shift
+
+  require master
+  if ! [ "$SCMASTER_ROAMING" ]; then
+    echo "Error: this machine is not roaming."
+    exit 2
+  fi
+
+  userdel -r "$login"
+}
+
 user_cron() {
   user_pull
 }
 
 user_pull() {
-  if user enabled; then
+  if ! user enabled; then
     exit 0
   fi
+
+  require master
 
   require temp
   local T="$(temp dir)"
@@ -91,7 +152,7 @@ user_pull() {
   done
 
   grep -E ":x:100[0-9][0-9]:" "$T/passwd" | while IFS=':' read user pass uid gid name homedir shell; do
-    if [ "$ROLE" != secondary ] && [ "$ROLE" != roaming ]; then
+    if ! [ "$SCMASTER_ROAMING" ]; then
       # Add user if missing
       if ! grep -E "^$user:" "$T/passwd.new" &>/dev/null; then
         grep -E "^$user:" "$T/passwd" >> "$T/passwd.new"
