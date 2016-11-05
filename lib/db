@@ -32,10 +32,11 @@ db_setup() {
   require settings
 
   syspackage postgresql pg_createcluster
-  PGVERSION="$(pg_lsclusters | tail -1 | cut -d' ' -f1)"
-
   syspackage postgresql-contrib /usr/lib/postgresql/$PGVERSION/bin/pgdump
   syspackage postgresql-client psql
+
+  PGVERSION="$(pg_lsclusters | tail -1 | cut -d' ' -f1)"
+  settings save
 }
 
 db_ready() {

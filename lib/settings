@@ -66,16 +66,53 @@ settings_save() {
   fi
 }
 
+settings_set() {
+  local name="$1"; shift
+  local value="$1"; shift
+
+  declare -g "$name=$value"
+
+  settings save
+}
+
+settings_del() {
+  local name="$1"; shift
+  eval "unset $name"
+
+  settings save
+}
+
 # Set a setting
 # Prompt the user for its value if unset
 # Do not change its value if set
 settings_prompt() {
   local name="$1"; shift
-  local default="$1"; shift
-  local prompt="$1"; shift
+  local default="$1"; shift || default=""
+  local prompt="$1"; shift || default="Please enter the value of $name"
+
+  syspackage dialog dialog
 
   if [ -z "${!name}" ]; then
-    read -r -p "$prompt" -i "$default" v;
+    local v="$( \
+      dialog --inputbox "$prompt" 0 74 "$default" 3>&1 1>&2 2>&3 3>&- \
+    )"
+    clear
+    declare -g "$name=$v"
+  fi
+}
+
+settings_choice() {
+  local name="$1"; shift
+  local default="$1"; shift || default="$3"
+  local prompt="$1"; shift || default="Please enter the value of $name"
+
+  syspackage dialog dialog
+
+  if [ -z "${!name}" ]; then
+    local v="$( \
+      dialog --menu "$prompt" 0 0 0 "$@"
+    )"
+    clear
     declare -g "$name=$v"
   fi
 }

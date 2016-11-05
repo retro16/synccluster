@@ -120,7 +120,7 @@ owncloud_occ() {
 }
 
 owncloud_db() {
-  owncloud owncloud
+  echo "owncloud:owncloud"
 }
 
 owncloud_files() {

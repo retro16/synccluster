@@ -37,7 +37,7 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=$SCBIN $name boot
+ExecStart=$SCBIN $name boot "$@"
 User=root
 Group=root
 

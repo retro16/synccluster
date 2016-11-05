@@ -28,28 +28,48 @@ LICENSE
 ###############################################################################
 
 
-nfssrv_setup() {
-  syspackage nfs-kernel-server rpc.nfsd
-  cat > /etc/exports <<EOF
-/ 192.168.0.0/24(rw,sync,no_subtree_check,no_root_squash,crossmnt,fsid=0)
-EOF
-  exportfs -r
+mass_setup() {
+  require settings
+  settings prompt MASSDIR "/home/.local/mass" "Mass storage directory path"
+  if ! [ -d "$MASSDIR" ]; then
+    echo "$MASSDIR not found. Aborting"
+    exit 2
+  fi
+  settings save
 }
 
-nfssrv_enabled() {
-  if [ -e /etc/exports ] && which rpc.nfsd &>/dev/null; then
+mass_cleanup() {
+  require settings
+  unset MASSDIR
+  settings save
+}
+
+mass_enabled() {
+  if [ "$MASSDIR" ] && [ -d "$MASSDIR" ]; then
     return 0
   fi
   return 1
 }
 
-nfssrv_ready() {
-  if nfssrv enabled && grep "/ 192.168.0.0/24" /etc/exports &>/dev/null; then
+mass_ready() {
+  if mass enabled; then
     return 0
   fi
   return 1
 }
 
-nfssrv() {
-  subcall nfssrv "$@"
+mass_files() {
+  if ! has master || [ "$(master mode)" = "master" ]; then
+    if mass enabled; then
+      echo "$MASSDIR"
+    fi
+  fi
+}
+
+mass_settings() {
+  echo MASSDIR
+}
+
+mass() {
+  subcall mass "$@"
 }

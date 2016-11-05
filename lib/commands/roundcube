@@ -63,7 +63,7 @@ roundcube_files() {
 }
 
 roundcube_db() {
-  echo roundcubemail roundcubemail
+  echo "roundcubemail:roundcubemail"
 }
 
 roundcube_download() {

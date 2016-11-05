@@ -47,6 +47,13 @@ sshlink_add() {
   echo "Linked successfully to $host"
 }
 
+sshlink_has() {
+  if sshlink check; then
+    return 0
+  fi
+  return 1 
+}
+
 sshlink_exec() {
   local host="$1"; shift || host=localhost
   if [ "$host" = "localhost" ]; then
@@ -128,7 +135,7 @@ sshlink_check() {
   if [ "$host" = "localhost" ]; then
     return 0
   fi
-  if ssh "root@$host" exit 0; then
+  if ssh -n -o ConnectTimeout=1 "root@$host" exit 0; then
     return 0
   fi
   return 1

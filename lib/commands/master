@@ -44,55 +44,113 @@ EOF
 
 master_setup() {
   require settings
-  syspackage openssh-client ssh ssh-keygen ssh-copy-id
+  require sshlink
   syspackage rsync rsync
-  settings prompt SCMASTER_USER "" "Enter master server user and host (empty if this host is the master):"
-  if [ -z "$SCMASTER_USER" ]; then
-    echo "This host is a master"
-    settings save
-    return 0
-  fi
 
-  if ! [ -r "$HOME/.ssh/id_rsa" ]; then
-    ssh-keygen
-  fi
+  settings choice MASTER_MODE "standby" "Select relationship with the master server" \
+     "master" "Master server, hosts all services" \
+    "standby" "Standby server, synchronize periodically all services" \
+     "backup" "Backup server, only stores data backup" \
+     "client" "Local client, access data through NFS" \
+    "roaming" "Remote client, synchronize only selected users"
 
-  ssh-copy-id "$SCMASTER_USER"
-  if ! master exec exit 0; then
-    echo "Link to the master failed"
-    exit 1
-  fi
-
-  if ! master exec "$SC"; then
-    echo "Error: $SC is not installed on the master server."
-    exit 1
-  fi
-
-  while [ "$SCMASTER_ROAMING" != "y" ] && [ "$SCMASTER_ROAMING" != "n" ]; do
-    echo "Is this a roaming machine (y/n) ?"
-    read SCMASTER_ROAMING
-  done
-
-  if [ "$SCMASTER_ROAMING" = "y" ]; then
-    SCMASTER_ROAMING=1
+  if [ "$MASTER_MODE" != "master" ]; then
+    settings prompt MASTER "" "Enter master server user and host (empty if this host is the master):"
+    if ! sshlink has "$MASTER"; then
+      sshlink add "$MASTER"
+    fi
+    echo "Linked successfully to $MASTER"
   else
-    SCMASTER_ROAMING=""
+    MASTER=""
   fi
 
   settings save
-  echo "Linked successfully to $SCMASTER_USER"
+
+  require utils setup
+  case "$MASTER_MODE" in
+    "master")
+      require nfssrv setup
+      require mail setup
+      require roundcube setup
+      require owncloud setup
+      require wstunnel setup
+      ;;
+    "standby")
+      require nfssrv setup
+      require mail setup
+      require roundcube setup
+      require owncloud setup
+      require wstunnel setup
+      require user setup
+      ;;
+    "backup")
+      require backup setup
+      require user setup
+      ;;
+    "client")
+      require nfsclient setup
+      require user setup
+      ;;
+    "roaming")
+      require user setup
+      ;;
+  esac
+}
+
+master_promote() {
+  if ! master ready; then
+    echo "Master package not configured"
+    exit 2
+  fi
+  if [ "$MASTER_MODE" != "standby" ]; then
+    echo "$MASTER_MODE hosts cannot be promoted to master"
+    exit 2
+  fi
+
+  require user
+  user cleanup
+
+  require settings
+  MASTER_MODE="master"
+  settings save
+}
+
+master_demote() {
+  if ! master ready; then
+    echo "Master package not configured"
+    exit 2
+  fi
+  if [ "$MASTER_MODE" != "master" ]; then
+    echo "$MASTER_MODE hosts cannot be put to standby"
+    exit 2
+  fi
+  
+  require settings
+  require user
+}
+
+# Synchronize to master
+master_sync() {
 }
 
 # Undo the link to the master
-master_clean() {
+master_cleanup() {
   require settings
-  unset SCMASTER_USER
-  unset SCMASTER_ROAMING
+  unset MASTER
+  unset MASTER_MODE
   settings save
 }
 
+master_mode() {
+  if [ "$MASTER_MODE" ]; then
+    echo "$MASTER_MODE"
+  else
+    echo "master" # No master defined, we are the master
+  fi
+}
+
 master_enabled() {
-  if [ -z "$SCMASTER_USER" ] || ! [ -r "$HOME/.ssh/id_rsa" ]; then
+  if [ -z "$MASTER" ] || ! [ -r "$HOME/.ssh/id_rsa" ]; then
     return 1
   fi
   return 0
@@ -106,38 +164,41 @@ master_ready() {
 }
 
 master_getfile() {
-  master check
   local source="$1"; shift
   local dest="$1"; shift
 
-  rsync -az "$SCMASTER_USER:${sources[@]}" "$dest"
+  rsync -az "$MASTER:${sources[@]}" "$dest"
 }
 
 master_exec() {
-  set +e
   local rv
-  if [ "$SCMASTER_USER" ]; then
-    ssh "$MASTER_USER" "$SC master exec" "$@"
-    rv="$?"
+  if [ "$MASTER" ]; then
+    if ssh "$MASTER" "$SC master exec" "$@"; then
+      rv=0
+    else
+      rv="$?"
+    fi
   else
-    "$@"
-    rv="$?"
+    if "$@"; then
+      rv=0
+    else
+      rv="$?"
+    fi
   fi
-  set -e
   return $rv
 }
 
 master_status() {
-  if [ "$SCMASTER_USER" ]; then
-    echo "This host points to master host $SCMASTER_USER"
+  if [ "$MASTER" ]; then
+    echo "This host is a $(master mode) points to master host $MASTER"
   else
-    echo "This host has no master"
+    echo "This host is a master"
   fi
 }
 
 master_settings() {
-  echo SCMASTER_USER
-  echo SCMASTER_ROAMING
+  echo MASTER
+  echo MASTER_MODE
 }
 
 master() {

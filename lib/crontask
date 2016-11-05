@@ -28,13 +28,17 @@ LICENSE
 ###############################################################################
 
 
+crontask_cleanup() {
+  rm -f /etc/cron.*/"$SC"_*
+}
+
 crontask_add() {
   local module="$1"; shift
   local period="$1"; shift # period can be "hourly" "daily" "weekly" or "monthly".
 
   cat > /etc/cron."$period"/"$SC"_"$module" <<EOF
 #!/bin/sh
-flock -w 30 -E 1 '/etc/cron.$period/$SC_$module' $SC $module cron $period
+flock -w 30 -E 1 '/etc/cron.$period/$SC_$module' $SC $module cron $period "$@"
 EOF
   chmod +x /etc/cron."$period"/"$SC"_"$module"
 }

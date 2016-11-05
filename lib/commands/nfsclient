@@ -32,31 +32,38 @@ nfsclient_setup() {
   syspackage nfs-common nfsstat
   require temp
   require master setup
+
+  case "$(master mode)" in
+  "local")
+    nfsclient add "$MASTER" /home
+    ;;
+  esac
+}
+
+nfsclient_add() {
+  local host="$1"; shift
+  local path="$1"; shift
+
   local t="$(temp file)"
-  grep -v ' nfs4 ' /etc/fstab > "$t"
+  grep -vE " $path *nfs4 " /etc/fstab > "$t"
   cat >> "$t" <<EOF
-${SCMASTER_USER#*@}:/ /home nfs4 rw,rsize=131072,wsize=131072 0 0
+$host:$path $path nfs4 rw,rsize=131072,wsize=131072 0 0
 EOF
   mv "$t" /etc/fstab
   temp forget
 }
 
-nfsclient_cleanup() {
+nfsclient_del() {
+  local path="$1"; shift
+
   local t="$(temp file)"
-  grep -v ' nfs4 ' /etc/fstab > "$t"
+  grep -vE " $path *nfs4 " /etc/fstab > "$t"
   mv "$t" /etc/fstab
   temp forget
 }
 
 nfsclient_enabled() {
   if grep ' nfs4 ' /etc/fstab &>/dev/null; then
-    return 0
-  fi
-  return 1
-}
-
-nfsclient_ready() {
-  if nfsclient enabled; then
     return 0
   fi
   return 1

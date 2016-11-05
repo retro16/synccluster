@@ -150,10 +150,7 @@ syspackage() {
   local package="$1"; shift
   local commands
 
-  if ! [ -e /etc/apt/sources.list.d/$SC.list ]; then
-    # Add required backports
-    cat > /etc/apt/sources.list.d/$SC.list
-  fi
+  require apt setup
 
   if [ "$#" -eq 0 ]; then
     apt install "$package"
