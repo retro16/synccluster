@@ -30,6 +30,9 @@ LICENSE
 
 sshlink_add() {
   local host="$1"; shift || host=localhost
+  if sshlink has "$host"; then
+    return 0
+  fi
   if [ "$host" != localhost ]; then
     syspackage openssh-client ssh ssh-keygen ssh-copy-id
     syspackage rsync rsync
@@ -104,6 +107,24 @@ sshlink_getfiles() {
   temp release
 }
 
+sshlink_getsettings() {
+  local host="$1"; shift
+  require settings
+
+  local mod
+  local slist
+  local s
+
+  for mod in "$@"; do
+    slist="$(sshlink sc "$host" "$mod" settings)"
+    for s in $slist; do
+      settings set "$S" "$(sshlink sc "$host" settings get "$s")"
+    done
+  done
+
+  settings save
+}
+
 sshlink_exclude_list() {
   cat <<EOF
 - *.o
@@ -135,7 +156,7 @@ sshlink_check() {
   if [ "$host" = "localhost" ]; then
     return 0
   fi
-  if ssh -n -o ConnectTimeout=1 "root@$host" exit 0; then
+  if ssh -n -o ConnectTimeout=1 "$host" exit 0; then
     return 0
   fi
   return 1

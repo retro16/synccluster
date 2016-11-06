@@ -28,69 +28,44 @@ LICENSE
 ###############################################################################
 
 
-mass_setup() {
-  require settings
-  settings prompt MASSDIR "/home/.local/mass" "Mass storage directory path"
-  if ! [ -d "$MASSDIR" ]; then
-    echo "$MASSDIR not found. Aborting"
-    exit 2
-  fi
+sshshare_add() {
+  local host="$1"; shift
+  local remote="$1"; shift
+  local path="$1"; shift || path="$remote"
 
-  if has master; then
-    case "$(master mode)" in
-      "standby"|"roaming")
-        require sshlink
-        local remotedir="$(sshlink sc "$MASTER" mass files)"
-        if [ "$remotedir" ]; then
-          require sshshare
-          sshshare add "$MASTER" "$remotedir" "$MASSDIR"
-        fi
-        ;;
-      "client")
-        local remotedir="$(sshlink sc "$MASTER" mass files)"
-        if [ "$remotedir" ]; then
-          require nfsclient
-          nfsclient add "$MASTER" "$remotedir" "$MASSDIR"
-        fi
-        ;;
-    esac
-  fi
+  require temp
+  require sshlink
 
-  settings save
+  syspackage sshfs sshfs
+
+  sshlink add "$host"
+
+  fstab="$(temp file)"
+  cat /etc/fstab > "$fstab"
+  cat >> "$fstab" <<EOF
+$host:$remote $path fuse.sshfs x-systemd.automount,_netdev,idmap=user,transform_symlinks,allow_other,default_permissions 0 0
+EOF
+  mv "$fstab" /etc/fstab
+  temp forget
+
+  mount "$path"
 }
 
-mass_cleanup() {
-  require settings
-  unset MASSDIR
-  settings save
+sshshare_del() {
+  local host="$1"; shift
+  local remote="$1"; shift
+  local path="$1"; shift || path="$remote"
+
+  umount "$path" || true
+
+  require temp
+  fstab="$(temp file)"
+  grep -vFx "$host:$remote $path fuse.sshfs x-systemd.automount,_netdev,idmap=user,transform_symlinks,allow_other,default_permissions 0 0" /etc/fstab > "$fstab"
+  mv "$fstab" /etc/fstab
+
+  temp forget
 }
 
-mass_enabled() {
-  if [ "$MASSDIR" ] && [ -d "$MASSDIR" ]; then
-    return 0
-  fi
-  return 1
-}
-
-mass_ready() {
-  if mass enabled; then
-    return 0
-  fi
-  return 1
-}
-
-mass_files() {
-  if ! has master || [ "$(master mode)" = "master" ]; then
-    if mass enabled; then
-      echo "$MASSDIR"
-    fi
-  fi
-}
-
-mass_settings() {
-  echo MASSDIR
-}
-
-mass() {
-  subcall mass "$@"
+sshshare() {
+  subcall sshshare "$@"
 }

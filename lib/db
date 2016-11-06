@@ -59,19 +59,22 @@ db_backup() {
   syspackage xz xz-utils
   syspackage postgresql-client pg_dump pg_dumpall
   pushd / &>/dev/null
+  echo "DROP ROLE IF EXISTS $user;"
   su -c "pg_dumpall --roles-only | grep -P '^(?:CREATE|DROP|ALTER) ROLE $user' " postgres
   echo "DROP DATABASE IF EXISTS $database;"
   echo "CREATE DATABASE $database OWNER=$user;"
-  su -c "pg_dump -c $database | xz -c -6" postgres
+  su -c "pg_dump --no-tablespaces $database | xz -c -6" postgres
   popd &>/dev/null
 }
 
 # Restores a xz backup from stdin into the local postgres
 db_restore() {
+  local database="$1"; shift
+
   syspackage unxz xz-utils
   syspackage postgresql-client psql
   pushd / &>/dev/null
-  su -c 'unxz -c | psql -q' postgres >/dev/null
+  su -c 'unxz -c | psql -q $database' postgres >/dev/null
   popd &>/dev/null
 }
 
@@ -97,6 +100,21 @@ db_del() {
   popd &>/dev/null
 }
 
+db_has() {
+  local database="$1"; shift
+
+  local rv
+  pushd / &>/dev/null
+  rv="$(su -c "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='$database';\"" postgres)"
+  popd &>/dev/null
+
+  if [ "$rv" -eq 1 ]; then
+    return 0
+  fi
+
+  return 1
+}
+
 db_sql() {
   local user="$1"; shift
   local password="$1"; shift
@@ -105,6 +123,33 @@ db_sql() {
   pushd / &>/dev/null
   PGPASSWORD="${password}" psql -U "$user" -h localhost -p 5432 "$database"
   popd &>/dev/null
+}
+
+# Pull a remote database to the local database
+# Used for synchronization
+db_pull() {
+  local module="$1"; shift
+  local host="$1"; shift
+
+  require sshlink
+  local dblist="$(sshlink sc "$host" "$module" db)"
+
+  local db
+  local dbuser
+  local dbname
+  if [ "$dblist" ]; then
+    for db in $dblist; do
+      dbuser="${db%%:*}"
+      dbname="${db#*:}"
+      sshlink sc "$host" db backup "$dbuser" "$dbname" | db restore "$dbname"
+    done
+  fi
+}
+
+# Returns the hashed password of a user
+db_getpw() {
+  local user="$1"; shift
+  su -c "pg_dumpall -r" postgres | grep "ALTER ROLE $user " | cut -d\' -f2
 }
 
 db_enabled() {

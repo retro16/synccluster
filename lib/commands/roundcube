@@ -66,6 +66,19 @@ roundcube_db() {
   echo "roundcubemail:roundcubemail"
 }
 
+roundcube_sync() {
+  local host="$1"; shift
+  local mode="$1"; shift
+
+  if ! contains "$mode" master standby; then return 0; fi
+
+  require files
+  files pull roundcube "$host"
+
+  require db
+  db pull roundcube "$host"
+}
+
 roundcube_download() {
   local roundcube_url="http://downloads.sourceforge.net/project/roundcubemail/roundcubemail/$roundcube_version/roundcubemail-$roundcube_version-complete.tar.gz"
 

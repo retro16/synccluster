@@ -92,7 +92,7 @@ backup_cron() {
   done
 }
 
-backup start() {
+backup_start() {
   local bhost="$1"; shift
 
   [ -d "$BACKUP_DIR/$bhost/fs" ] || mkdir -p "$BACKUP_DIR/$bhost/fs"

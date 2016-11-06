@@ -85,6 +85,14 @@ user_del() {
   fi
 }
 
+user_has() {
+  local login="$1"; shift
+  if grep -E "^$login:" /etc/passwd &>/dev/null; then
+    return 0
+  fi
+  return 1
+}
+
 # Import a user from the master on a roaming machine
 user_import() {
   local login="$1"; shift
@@ -95,13 +103,8 @@ user_import() {
 
   useradd -c '' -d "/home/$login" -m -N -u "$uid" -g "$gid" "$login"
 
-  if has unisonsync; then
-    unisonsync adduser "${SCMASTER_USER#*@}" "$login" "/home/$login"
-    unisonsync cron
-  fi
-
   # Update the password and other details
-  user pull
+  user sync "$MASTER" "$(master mode)"
 }
 
 user_export() {
@@ -114,7 +117,7 @@ user_free() {
   local login="$1"; shift
 
   require master
-  if ! [ "$SCMASTER_ROAMING" ]; then
+  if [ "$(master mode)" != "roaming" ]; then
     echo "Error: this machine is not roaming."
     exit 2
   fi
@@ -122,21 +125,25 @@ user_free() {
   userdel -r "$login"
 }
 
-user_cron() {
-  user_pull
-}
+user_sync() {
+  local host="$1"; shift
+  local mode="$1"; shift
 
-user_pull() {
+  if [ "$mode" = "master" ]; then return 0; fi
+
   if ! user enabled; then
-    exit 0
+    return 0
   fi
-
-  require master
 
   require temp
   local T="$(temp dir)"
 
-  master getfile "/etc/{passwd,shadow,group,gshadow}" "$T"/
+  sshlink getfiles "$host" "$T" <<EOF
+/etc/passwd
+/etc/shadow
+/etc/group
+/etc/gshadow
+EOF
   cp /etc/passwd "$T"/passwd.new
   cp /etc/shadow "$T"/shadow.new
   cp /etc/group "$T"/group.new
@@ -148,30 +155,22 @@ user_pull() {
     # Add group if missing
     if ! grep -E "^$group:x:" "$T/group.new"; then
       grep -E "^$group:x:" "$T/group" >> "$T/group.new"
+      grep -E "^$group:" "$T/gshadow" >> "$T/gshadow.new"
     fi
   done
 
   grep -E ":x:100[0-9][0-9]:" "$T/passwd" | while IFS=':' read user pass uid gid name homedir shell; do
-    if ! [ "$SCMASTER_ROAMING" ]; then
-      # Add user if missing
-      if ! grep -E "^$user:" "$T/passwd.new" &>/dev/null; then
-        grep -E "^$user:" "$T/passwd" >> "$T/passwd.new"
+    if ! contains "$mode" master roaming && ! grep -E "^$user:" "$T/passwd.new" &>/dev/null; then
+      # A remote user has been created: add it locally
+      grep -E "^$user:" "$T/passwd" >> "$T/passwd.new"
 
-        # Add user to the same groups as local user
-        sed -i 's;\(.*:x:[0-9]*.*[:,]local.*\);\1,'"$user"';' "$T/group.new"
+      # Add user to the same groups as local user
+      sed -i 's;\(.*:x:[0-9]*.*[:,]local.*\);\1,'"$user"';' "$T/group.new"
 
-        # Create home directory from skeleton
-        if ! [ -d "$homedir" ]; then
-          cp -a /etc/skel "$homedir"
-          chown -R "$uid:$gid" "$homedir"
-        fi
-      fi
-
-      if grep -E "^$user:" "$T/passwd.new" &>/dev/null; then
-        # Update unison profile
-        if has unisonsync; then
-          unisonsync adduser "${SCMASTER_USER#*@}" "$user" "$homedir"
-        fi
+      # Create home directory from skeleton
+      if ! [ -d "$homedir" ]; then
+        cp -a /etc/skel "$homedir"
+        chown -R "$uid:$gid" "$homedir"
       fi
     fi
 
@@ -179,8 +178,6 @@ user_pull() {
     grep -vE "^$user:" "$T/shadow.new" > "$T/shadow.new."
     grep -E "^$user:" "$T/shadow" >> "$T/shadow.new."
     mv "$T/shadow.new." "$T/shadow.new"
-
-    echo "$user"
   done
 
   # Update sudoers
@@ -197,37 +194,139 @@ user_pull() {
     mv "$T/group.new." "$T/group.new"
   fi
 
-  cp "$T/gshadow" "$T/gshadow.new"
-
   # Update system files
   mv "$T/passwd.new" /etc/passwd
   mv "$T/shadow.new" /etc/shadow
   mv "$T/group.new" /etc/group
-  chown root:root /etc/passwd /etc/shadow /etc/group
+  mv "$T/gshadow.new" /etc/gshadow
+  chown root:root /etc/passwd /etc/shadow /etc/group /etc/gshadow
   chmod 644 /etc/passwd /etc/group
-  chmod 600 /etc/shadow
+  chmod 600 /etc/shadow /etc/gshadow
 
   # Remove obsolete users
   grep -E ":x:100[0-9][0-9]:" /etc/passwd | while IFS=':' read user pass uid gid name homedir shell; do
     if ! grep -E "^$user:" "$T"/passwd; then
-      echo "User $user was removed. Home directory left untouched."
-      if has unisonsync; then
-        unisonsync deluser "$user"
-      fi
+      echo "User $user was removed remotely. Home directory left untouched."
       userdel "$user"
+      if contains "$mode" standby roaming && has unisonsync; then
+        unisonsync del "$host" "$homedir"
+      fi
     fi
   done
 
-  case "$ROLE" in
-    standby|secondary)
-      # Synchronize crontabs
-      dir /var/spool/cron/crontabs.master
-      master getfile /var/spool/cron/crontabs/ /var/spool/cron/crontabs.master/
-      ;;
-  esac
+  # Remove obsolete groups
+  grep -E ":x:100[0-9][0-9]:" /etc/group | while IFS=':' read group pass gid members; do
+    if ! grep -E "^$group:" "$T"/group; then
+      echo "Group $group was removed remotely."
+      groupdel "$group"
+    fi
+  done
+
+  # Synchronize files
+  if contains "$mode" standby roaming && has unisonsync; then
+    grep -E ":x:100[0-9][0-9]:" /etc/passwd | while IFS=':' read user pass uid gid name homedir shell; do
+      unisonsync start "$host" "$homedir" 
+    done
+  fi
 
   temp release
-  unset T
+}
+
+user_getgroup() {
+  local gid="$1"; shift
+
+  local line="$(grep ":x:$gid:" /etc/group)"
+  if [ "$line" ]; then
+    local name
+    local password
+    local gid
+    local members
+    IFS=":" read name password gid members <<< "$line"
+    echo "$name"
+    return 0
+  fi
+  return 1
+}
+
+user_restoregroups() {
+  local source="$1"; shift
+
+  if ! [ -e "$1/fs/etc/group" ] || ! [ -e "$1/fs/etc/gshadow" ]; then
+    echo "Missing group files in the backup" 1>&2
+    exit 2
+  fi
+
+  require temp
+  local tmp="$(temp dir)"
+  cp /etc/group "$tmp"
+  cp /etc/gshadow "$tmp"
+
+  local name
+  local password
+  local gid
+  local members
+  grep -E ":x:100[0-9][0-9]:" "$source/fs/etc/group" | while IFS=':' read name password gid members; do
+    if ! grep -E "^$name:" "$tmp/group" &>/dev/null; then
+      # Restore missing group
+      echo "$name:$password:$gid:$members" >> "$tmp/group"
+      grep -E "^$name:" "$source/fs/etc/gshadow" >> "$tmp/gshadow"
+    fi
+  done
+
+  mv "$tmp/group" /etc/group
+  mv "$tmp/gshadow" /etc/gshadow
+  chown root:root /etc/group /etc/gshadow
+  chmod 644 /etc/group
+  chmod 600 /etc/gshadow
+
+  temp release
+}
+
+user_restoresudoers() {
+  local source="$1"; shift
+
+echo TODO restoresudoers
+}
+
+user_restore() {
+  local source="$1"; shift
+
+  if ! [ -e "$1/fs/etc/passwd" ] || ! [ -e "$1/fs/etc/shadow" ]; then
+    echo "Missing passwd files in the backup" 1>&2
+    exit 2
+  fi
+
+  user restoregroups "$source"
+
+  require temp
+  local tmp="$(temp dir)"
+  cp /etc/passwd "$tmp"
+  cp /etc/shadow "$tmp"
+
+  local user
+  local pass
+  local uid
+  local gid
+  local name
+  local homedir
+  local shell
+  grep -E ":x:100[0-9][0-9]:" "$source/fs/etc/passwd" | while IFS=':' read user pass uid gid name homedir shell; do
+    if ! user has "$user"; then
+      # Restore missing user
+      echo "$user:$pass:$uid:$gid:$name:$homedir:$shell" >> "$tmp/passwd"
+      grep -E "^$name:" "$source/fs/etc/shadow" >> "$tmp/shadow"
+    fi
+  done
+
+  mv "$tmp/passwd" /etc/passwd
+  mv "$tmp/shadow" /etc/shadow
+  chown root:root /etc/passwd /etc/shadow
+  chmod 644 /etc/passwd
+  chmod 600 /etc/shadow
+
+  temp release
+
+  user restoresudoers "$source"
 }
 
 user_enabled() {
@@ -248,6 +347,14 @@ user_ready() {
     return 0
   fi
   return 1
+}
+
+user_files() {
+  echo /etc/passwd
+  echo /etc/shadow
+  echo /etc/group
+  echo /etc/gshadow
+  ls -NUd /home/*
 }
 
 user() {

@@ -31,12 +31,9 @@ LICENSE
 unisonsync_setup() {
   require settings
   syspackage unison
-  settings UNISON "/var/lib/unison" "Enter the UNISON base directory:"
+  settings prompt UNISON "/var/lib/unison" "Enter the UNISON base directory:"
   [ -d "$UNISON" ] || mkdir -p "$UNISON"
   unisonsync common_profile > "$UNISON/_common.prf"
-  crontask add unisonsync hourly
-  crontask add unisonsync daily
-  crontask add unisonsync weekly
   settings save
 }
 
@@ -44,47 +41,33 @@ unisonsync_clean() {
   require settings
   rm -rf "$UNISON"
   unset UNISON
-  crontask del unisonsync hourly
-  crontask del unisonsync daily
-  crontask del unisonsync weekly
   settings save
 }
 
 unisonsync_add() {
   local host="$1"; shift
-  local path="$1"; shift
-  local period="$1"; shift
+  local remotepath="$1"; shift
+  local localpath="$1"; shift
 
-  cat > "$UNISON/${period}_${host}$(tr -c '[a-zA-Z0-9]' '_' <<< "$path").prf" << EOF
+  cat > "$UNISON/$(unisonsync profilename "$host" "$remotepath").prf" << EOF
 include _common
-root = $path
-root = ssh://root@$host/$path
+root = $localpath
+root = ssh://root@$host/$remotepath
 EOF
+}
+
+# Returns the name of the profile based on a host and a path
+unisonsync_profilename() {
+  local host="$1"; shift
+  local remotepath="$1"; shift
+  echo "${host}$(tr -c '[a-zA-Z0-9]' '_' <<< "$remotepath")"
 }
 
 unisonsync_del() {
   local host="$1"; shift
   local path="$1"; shift
-  local period="$1"; shift
 
-  rm "$UNISON/${period}_${host}$(tr -c '[a-zA-Z0-9]' '_' <<< "$path").prf"
-}
-
-unisonsync_adduser() {
-  local host="$1"; shift
-  local user="$1"; shift
-  local homedir="$1"; shift
-
-  cat > "$UNISON/hourly_$user.prf" << EOF
-include _common
-root = $homedir
-root = ssh://root@$host/$homedir
-EOF
-}
-
-unisonsync_deluser() {
-  local user="$1"; shift
-  rm -f "$UNISON/hourly_$user.prf"
+  rm "$UNISON/$(unisonsync profilename "$host" "$path").prf"
 }
 
 unisonsync_enabled() {
@@ -102,14 +85,31 @@ unisonsync_ready() {
 }
 
 unisonsync_files() {
-  ls "$UNISON"
+  ls "$UNISON"/[^_.]*.prf
 }
 
-unisonsync_cron() {
-  local period="$1"; shift
-  for f in "$UNISON/$period"_*".prf"; do
-    unison "$(basename "$f" .prf)"
-  done
+# Synchronize profiles from a remote host
+unisonsync_sync() {
+  local host="$1"; shift
+  local mode="$1"; shift
+
+  if contains "$mode" backup client; then return 0; fi
+
+  require files
+  files pull unisonsync "$host"
+}
+
+# Execute a file synchronization
+unisonsync_start() {
+  local host="$1"; shift
+  local remotepath="$1"; shift
+  local localpath="$1"; shift || localpath="$remotepath"
+
+  if ! unisonsync has "$host" "$remotepath"; then
+    unisonsync add "$host" "$remotepath" "$localpath"
+  fi
+
+  unison "$(unisonsync profilename "$host" "$remotepath")"
 }
 
 unisonsync_common_profile() {

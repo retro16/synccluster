@@ -28,69 +28,20 @@ LICENSE
 ###############################################################################
 
 
-mass_setup() {
-  require settings
-  settings prompt MASSDIR "/home/.local/mass" "Mass storage directory path"
-  if ! [ -d "$MASSDIR" ]; then
-    echo "$MASSDIR not found. Aborting"
-    exit 2
-  fi
+# Pull files from a remote host
+# Used for synchronization
+files_pull() {
+  local module="$1"; shift
+  local host="$1"; shift
 
-  if has master; then
-    case "$(master mode)" in
-      "standby"|"roaming")
-        require sshlink
-        local remotedir="$(sshlink sc "$MASTER" mass files)"
-        if [ "$remotedir" ]; then
-          require sshshare
-          sshshare add "$MASTER" "$remotedir" "$MASSDIR"
-        fi
-        ;;
-      "client")
-        local remotedir="$(sshlink sc "$MASTER" mass files)"
-        if [ "$remotedir" ]; then
-          require nfsclient
-          nfsclient add "$MASTER" "$remotedir" "$MASSDIR"
-        fi
-        ;;
-    esac
-  fi
+  require sshlink
 
-  settings save
-}
-
-mass_cleanup() {
-  require settings
-  unset MASSDIR
-  settings save
-}
-
-mass_enabled() {
-  if [ "$MASSDIR" ] && [ -d "$MASSDIR" ]; then
-    return 0
-  fi
-  return 1
-}
-
-mass_ready() {
-  if mass enabled; then
-    return 0
-  fi
-  return 1
-}
-
-mass_files() {
-  if ! has master || [ "$(master mode)" = "master" ]; then
-    if mass enabled; then
-      echo "$MASSDIR"
-    fi
+  local files="$(sshlink sc "$host" "$module" files)"
+  if [ "$files" ]; then
+    sshlink getfiles "$host" <<< "$files"
   fi
 }
 
-mass_settings() {
-  echo MASSDIR
-}
-
-mass() {
-  subcall mass "$@"
+files() {
+  subcall files "$@"
 }

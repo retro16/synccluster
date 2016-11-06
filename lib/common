@@ -182,3 +182,17 @@ git_get() {
     git clone "$url" "$target"
   fi
 }
+
+# Returns true if the first parameter is equal to any other parameter
+# example:
+#  contains standby master standby client
+#  Returns true
+contains() {
+  local value="$1"; shift
+  for pattern in "$@"; do
+    if [ "$value" = "$pattern" ]; then
+      return 0
+    fi
+  done
+  return 1
+}

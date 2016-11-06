@@ -82,6 +82,11 @@ settings_del() {
   settings save
 }
 
+settings_get() {
+  local name="$1"; shift
+  echo "${!name}"
+}
+
 # Set a setting
 # Prompt the user for its value if unset
 # Do not change its value if set

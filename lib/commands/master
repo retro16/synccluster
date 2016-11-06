@@ -54,7 +54,7 @@ master_setup() {
      "client" "Local client, access data through NFS" \
     "roaming" "Remote client, synchronize only selected users"
 
-  if [ "$MASTER_MODE" != "master" ]; then
+  if [ "$(master mode)" != "master" ]; then
     settings prompt MASTER "" "Enter master server user and host (empty if this host is the master):"
     if ! sshlink has "$MASTER"; then
       sshlink add "$MASTER"
@@ -67,7 +67,7 @@ master_setup() {
   settings save
 
   require utils setup
-  case "$MASTER_MODE" in
+  case "$(master mode)" in
     "master")
       require nfssrv setup
       require mail setup
@@ -76,6 +76,7 @@ master_setup() {
       require wstunnel setup
       ;;
     "standby")
+      sshlink getsettings "$MASTER" nfssrv mail roundcube owncloud wstunnel user
       require nfssrv setup
       require mail setup
       require roundcube setup
@@ -97,13 +98,16 @@ master_setup() {
   esac
 }
 
+# get remote settings from a list of modules
+# module list is parameter list
+
 master_promote() {
   if ! master ready; then
     echo "Master package not configured"
     exit 2
   fi
-  if [ "$MASTER_MODE" != "standby" ]; then
-    echo "$MASTER_MODE hosts cannot be promoted to master"
+  if [ "$(master mode)" != "standby" ]; then
+    echo "$(master mode) hosts cannot be promoted to master"
     exit 2
   fi
 
@@ -120,8 +124,8 @@ master_demote() {
     echo "Master package not configured"
     exit 2
   fi
-  if [ "$MASTER_MODE" != "master" ]; then
-    echo "$MASTER_MODE hosts cannot be put to standby"
+  if [ "$(master mode)" != "master" ]; then
+    echo "$(master mode) hosts cannot be put to standby"
     exit 2
   fi
   
@@ -129,8 +133,10 @@ master_demote() {
   require user
 }
 
-# Synchronize to master
-master_sync() {
+master_cron() {
+  local period="$1"; shift
+
+  broadcall sync "$MASTER" "$(master mode)"
 }
 
 # Undo the link to the master
@@ -157,23 +163,16 @@ master_enabled() {
 }
 
 master_ready() {
-  if master enabled; then
+  if master enabled && [ "$MASTER_MODE" ] && ( [ "$(master mode)" = "master" ] || ( has sshlink && sshlink check "$MASTER" ) ); then
     return 0
   fi
   return 1
 }
 
-master_getfile() {
-  local source="$1"; shift
-  local dest="$1"; shift
-
-  rsync -az "$MASTER:${sources[@]}" "$dest"
-}
-
 master_exec() {
   local rv
   if [ "$MASTER" ]; then
-    if ssh "$MASTER" "$SC master exec" "$@"; then
+    if sshlink exec "$MASTER" "$@"; then
       rv=0
     else
       rv="$?"

@@ -130,6 +130,29 @@ $CLOUDDIR
 EOF
 }
 
+owncloud_sync() {
+  local host="$1"; shift
+  local mode="$1"; shift
+
+  if ! contains "$mode" master standby; then return 0; fi
+
+  require db
+  db pull owncloud "$host"
+
+  require sshlink
+  sshlink getfiles "$host" <<< "$WWWDIR/owncloud/config/config.php"
+
+  require unisonsync
+  unisonsync start "$host" "$(sshlink sc "$host" settings get CLOUDDIR)" "$CLOUDDIR"
+}
+
+owncloud_ready() {
+  if [ -d "$CLOUDDIR" ] && [ -e "$WWWDIR/owncloud/config/config.php" ] && has db && db has owncloud; then
+    return 0
+  fi
+  return 1
+}
+
 owncloud_settings() {
   echo OWNCLOUD_PASSWORD
   echo CLOUDDIR

@@ -55,6 +55,18 @@ mail_setup() {
   settings save
 }
 
+mail_ready() {
+  if which postfix &>/dev/null \
+  && which doveadm &>/dev/null \
+  && which procmail &>/dev/null \
+  && [ -e /etc/procmailrc ] \
+  && [ -d "$MAILDIR" ] \
+  ; then
+    return 0
+  fi
+  return 1
+}
+
 mail_files() {
   echo "/etc/postfix/main.cf"
   echo "/etc/aliases"
