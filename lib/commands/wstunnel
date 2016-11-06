@@ -31,6 +31,7 @@ LICENSE
 wstunnel_setup() {
   require nginx setup
   syspackage nodejs-legacy node
+  syspackage npm npm
   npm install -g wstunnel
   require daemon
   daemon add wstunnel

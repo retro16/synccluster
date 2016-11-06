@@ -68,6 +68,16 @@ ssl_enabled() {
   return 1
 }
 
+ssl_sync() {
+  local host="$1"; shift
+  local mode="$1"; shift
+
+  if [ "$mode" = master ]; then return 0; fi
+
+  require sshlink
+  ssl files | sshlink getfiles "$host"
+}
+
 ssl_restore() {
   local source="$1"; shift
   files restoremodule ssl "$source"

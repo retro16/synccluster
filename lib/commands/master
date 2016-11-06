@@ -85,6 +85,8 @@ echo XXX calling syspackage rsync rsync
       require wstunnel setup
       ;;
     "standby")
+      require ssl setup
+      ssl sync "$MASTER" standby
       require nfssrv setup
       require mail setup
       require roundcube setup
@@ -107,6 +109,7 @@ echo XXX calling syspackage rsync rsync
       crontask add master daily
       require boot
       boot add master
+      utils client
       ;;
     "roaming")
       require user setup

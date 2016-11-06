@@ -36,7 +36,7 @@ nginx_setup() {
   rm /etc/nginx/sites-enabled/*
   ln -s ../sites-available/proxy /etc/nginx/sites-enabled/proxy
   systemctl enable nginx
-  systemctl start nginx
+  systemctl restart nginx
   systemctl start apache2 || true
 }
 
