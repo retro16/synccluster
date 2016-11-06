@@ -30,6 +30,7 @@ LICENSE
 
 ### Initialization ###
 SCMODULES=""
+TRAPS=""
 
 
 ### Global functions ###

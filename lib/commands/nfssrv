@@ -33,7 +33,8 @@ nfssrv_setup() {
   cat > /etc/exports <<EOF
 / 192.168.0.0/24(rw,sync,no_subtree_check,no_root_squash,crossmnt,fsid=0)
 EOF
-  exportfs -r
+  systemctl enable nfs-kernel-server
+  systemctl restart nfs-kernel-server
 }
 
 nfssrv_enabled() {

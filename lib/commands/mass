@@ -36,26 +36,6 @@ mass_setup() {
     exit 2
   fi
 
-  if has master; then
-    case "$(master mode)" in
-      "standby"|"roaming")
-        require sshlink
-        local remotedir="$(sshlink sc "$MASTER" mass files)"
-        if [ "$remotedir" ]; then
-          require sshshare
-          sshshare add "$MASTER" "$remotedir" "$MASSDIR"
-        fi
-        ;;
-      "client")
-        local remotedir="$(sshlink sc "$MASTER" mass files)"
-        if [ "$remotedir" ]; then
-          require nfsclient
-          nfsclient add "$MASTER" "$remotedir" "$MASSDIR"
-        fi
-        ;;
-    esac
-  fi
-
   settings save
 }
 

@@ -63,10 +63,13 @@ utils_client() {
     simple-scan \
     solaar \
     numlockx \
+    sound-converter \
   -y
 
-  if ! [ -e "/etc/apt/sources.list/${SC}_owncloud_client.list" ]; then
-    echo 'deb http://download.opensuse.org/repositories/isv:/ownCloud:/desktop/Debian_8.0/ /' > "/etc/apt/sources.list/${SC}_owncloud_client.list"
+  apt-get -y --purge remove iceweasel firefox-esr || true
+
+  if ! [ -e "/etc/apt/sources.list.d/${SC}_owncloud_client.list" ]; then
+    echo 'deb http://download.opensuse.org/repositories/isv:/ownCloud:/desktop/Debian_8.0/ /' > "/etc/apt/sources.list.d/${SC}_owncloud_client.list"
     wget -qO- http://download.opensuse.org/repositories/isv:ownCloud:desktop/Debian_8.0/Release.key | apt-key add -
     apt-get update
     apt-get install owncloud-client

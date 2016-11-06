@@ -31,24 +31,39 @@ LICENSE
 # Temporary files management
 
 temp_dir() {
-  TEMP_FILE="$(mktemp -d)"
-  trap "rm -rf '$TEMP_FILE'" EXIT
+  local varname="$1"; shift || varname="TEMP_FILE"
+  declare -g "$varname"="$(mktemp -d)"
+  TRAPS="$TRAPS"$'\n'"rm -rf '${!varname}';"
+  trap "$TRAPS" EXIT
 }
 
 temp_file() {
-  TEMP_FILE="$(mktemp)"
-  trap "rm -rf '$TEMP_FILE'" EXIT
+  local varname="$1"; shift || varname="TEMP_FILE"
+  declare -g "$varname"="$(mktemp)"
+  TRAPS="$TRAPS"$'\n'"rm -rf '${!varname}';"
+  trap "$TRAPS" EXIT
+}
+
+temp_filename() {
+  local varname="$1"; shift || varname="TEMP_FILE"
+  declare -g "$varname"="$(mktemp -u)"
+  TRAPS="$(head -n -1 <<< "$TRAPS")"
+  trap "$TRAPS" EXIT
 }
 
 temp_release() {
-  rm -rf "$TEMP_FILE"
-  trap EXIT
-  unset TEMP_FILE
+  local varname="$1"; shift || varname="TEMP_FILE"
+  rm -rf "${!varname}"
+  TRAPS="$(head -n -1 <<< "$TRAPS")"
+  trap "$TRAPS" EXIT
+  unset "$varname"
 }
 
 temp_forget() {
-  trap EXIT
-  unset TEMP_FILE
+  local varname="$1"; shift || varname="TEMP_FILE"
+  TRAPS="$(head -n -1 <<< "$TRAPS")"
+  trap "$TRAPS" EXIT
+  unset "$varname"
 }
 
 temp() {

@@ -28,28 +28,19 @@ LICENSE
 ###############################################################################
 
 
-nfsclient_setup() {
-  syspackage nfs-common nfsstat
-  require temp
-  require master setup
-
-  case "$(master mode)" in
-  "local")
-    nfsclient add "$MASTER" /home
-    ;;
-  esac
-}
 
 nfsclient_add() {
   local host="$1"; shift
   local remote="$1"; shift
   local path="$1"; shift || path="$remote"
 
+  syspackage nfs-common nfsstat
+
   require temp
   temp file
   grep -vE " $path *nfs4 " /etc/fstab > "$TEMP_FILE"
   cat >> "$TEMP_FILE" <<EOF
-$host:$remote $path nfs4 rw,rsize=131072,wsize=131072 0 0
+$host:$remote $path nfs4 rw,rsize=131072,wsize=131072,_netdev
 EOF
   mv "$TEMP_FILE" /etc/fstab
   temp forget
@@ -67,6 +58,14 @@ nfsclient_del() {
   grep -vE " $path *nfs4 " /etc/fstab > "$TEMP_FILE"
   mv "$TEMP_FILE" /etc/fstab
   temp forget
+}
+
+nfsclient_has() {
+  local path="$1"; shift
+  if grep -E " $path *nfs4 " /etc/fstab &>/dev/null && mountpoint -q "$path"; then
+    return 0
+  fi
+  return 1
 }
 
 nfsclient_enabled() {

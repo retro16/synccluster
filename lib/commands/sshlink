@@ -115,10 +115,10 @@ sshlink_getfiles() {
     host="$host:"
   fi
   require temp
-  temp file
-  sshlink_exclude_list > "$TEMP_FILE"
-  rsync -vaz --delete --files-from=- -r --filter=". $TEMP_FILE" "$host"/ "$target" || true
-  temp release
+  temp file EXCLUDE_LIST
+  sshlink_exclude_list > "$EXCLUDE_LIST"
+  rsync -vaz --delete --files-from=- -r --filter=". $EXCLUDE_LIST" "$host"/ "$target" || true
+  temp release EXCLUDE_LIST
 }
 
 sshlink_getsettings() {
@@ -130,6 +130,7 @@ sshlink_getsettings() {
   local s
 
   for m in "$@"; do
+    require "$m"
     slist="$(sshlink sc "$host" "$m" settings)"
     for s in $slist; do
       settings set "$s" "$(sshlink sc "$host" settings get "$s")"

@@ -78,6 +78,7 @@ master_setup() {
   require utils setup
   case "$(master mode)" in
     "master")
+      require mass setup
       require nfssrv setup
       require mail setup
       require roundcube setup
@@ -87,6 +88,8 @@ master_setup() {
     "standby")
       require ssl
       ssl sync "$MASTER" standby
+      sshlink getsettings "$MASTER" mass unisonsync mail roundcube owncloud
+      require mass setup
       require unisonsync setup
       require nfssrv setup
       require mail setup
@@ -95,6 +98,9 @@ master_setup() {
       require wstunnel setup
       require user setup
       require crontask
+      require sshlink
+      require sshshare
+      sshshare add "$MASTER" "$MASSDIR"
       crontask add master daily
       ;;
     "backup")
@@ -104,13 +110,19 @@ master_setup() {
       crontask add master daily
       ;;
     "client")
-      require nfsclient setup
+      require nfsclient
+      nfsclient add "$MASTER" /home
+      require mass
+      sshlink getsettings "$MASTER" mass
+      [ -d "$MASSDIR" ] || mkdir -p "$MASSDIR"
+      nfsclient add "$MASTER" "$MASSDIR"
       require user setup
       require crontask
       crontask add master daily
       require boot
       boot add master
       utils client
+      user sync "$MASTER" client
       ;;
     "roaming")
       require user setup
@@ -224,7 +236,7 @@ master_ready() {
         fi
         ;;
       client)
-        if has nfsclient && nfsclient ready && has boot && boot has master; then
+        if has nfsclient && nfsclient has /home && has mass && nfsclient has "$MASSDIR" && has boot && boot has master; then
           return 0
         fi
         ;;

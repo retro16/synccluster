@@ -40,13 +40,13 @@ sshshare_add() {
 
   sshlink add "$host"
 
-  fstab="$(temp file)"
+  temp file fstab
   cat /etc/fstab > "$fstab"
   cat >> "$fstab" <<EOF
 $host:$remote $path fuse.sshfs x-systemd.automount,_netdev,idmap=user,transform_symlinks,allow_other,default_permissions 0 0
 EOF
   mv "$fstab" /etc/fstab
-  temp forget
+  temp forget fstab
 
   mount "$path"
 }
@@ -59,11 +59,11 @@ sshshare_del() {
   umount "$path" || true
 
   require temp
-  fstab="$(temp file)"
+  temp file fstab
   grep -vFx "$host:$remote $path fuse.sshfs x-systemd.automount,_netdev,idmap=user,transform_symlinks,allow_other,default_permissions 0 0" /etc/fstab > "$fstab"
   mv "$fstab" /etc/fstab
 
-  temp forget
+  temp forget fstab
 }
 
 sshshare() {
