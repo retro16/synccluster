@@ -75,8 +75,6 @@ backup_del() {
 backup_cron() {
   local period="$1"; shift
 
-  require sshlink
-
   local bhost
   local bperiod
   local bdblist
@@ -96,6 +94,7 @@ backup_start() {
   local bhost="$1"; shift
 
   [ -d "$BACKUP_DIR/$bhost/fs" ] || mkdir -p "$BACKUP_DIR/$bhost/fs"
+  require sshlink
   sshlink sc "$bhost" broadcall files | sshlink getfiles "$bhost" "$BACKUP_DIR/$bhost/fs"
 
   bdblist="$(sshlink sc "$bhost" broadcall db)"
@@ -112,7 +111,9 @@ backup_start() {
 
 backup_restore_from() {
   local source="$1"; shift
-
+  
+  require user
+  user restore "$source"
   broadcall restore "$source"
 }
 

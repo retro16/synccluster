@@ -51,7 +51,7 @@ user_add() {
   if ! user hasgroup "$group"; then
     user addgroup "$group"
   fi
-  useradd -c '' -d "/home/$login" -m -N -u "$newuid" -g "$group" "$login"
+  useradd -c '' -d "/home/$login" -m -N -u "$newuid" -g "$group" -s /bin/bash "$login"
 }
 
 user_del() {
@@ -334,7 +334,7 @@ user_restore() {
     if ! user has "$user"; then
       # Restore missing user
       echo "$user:$pass:$uid:$gid:$name:$homedir:$shell" >> "$TEMP_FILE/passwd"
-      grep -E "^$name:" "$source/fs/etc/shadow" >> "$TEMP_FILE/shadow"
+      grep -E "^$user:" "$source/fs/etc/shadow" >> "$TEMP_FILE/shadow"
 
       # Restore home directory data
       if [ -e "$source/fs/$homedir" ] && ! [ -e "$homedir" ]; then
@@ -381,7 +381,7 @@ user_files() {
   echo /etc/shadow
   echo /etc/group
   echo /etc/gshadow
-  echo "/home/[^.]*"
+  grep -E ":x:100[0-9][0-9]:" /etc/passwd | cut -d: -f6 || true
 }
 
 user() {

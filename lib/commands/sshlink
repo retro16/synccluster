@@ -109,10 +109,15 @@ sshlink_getfiles() {
   local host="$1"; shift || host=localhost
   local target="$1"; shift || target="/"
   if [ "$host" = localhost ] && [ "$target" = "/" ]; then return 0; fi
+  if [ "$host" = localhost ]; then
+    host=""
+  else
+    host="$host:"
+  fi
   require temp
   temp file
   sshlink_exclude_list > "$TEMP_FILE"
-  rsync -vaz --delete --files-from=- --filter=". $TEMP_FILE" "$host":/ "$target" || true
+  rsync -vaz --delete --files-from=- -r --filter=". $TEMP_FILE" "$host"/ "$target" || true
   temp release
 }
 
@@ -175,7 +180,7 @@ sshlink_putfiles() {
   local host="$1"; shift || host=localhost
   local target="$1"; shift || target="/"
   if [ "$host" = localhost ] && [ "$target" = "/" ]; then return 0; fi
-  rsync -az --delete --files-from=- / "$host":"$target"
+  rsync -az --delete --files-from=- -r / "$host":"$target"
 }
 
 sshlink_check() {

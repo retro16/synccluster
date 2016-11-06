@@ -70,6 +70,15 @@ roundcube_db() {
   echo "roundcubemail:roundcubemail"
 }
 
+roundcube_restore() {
+  local source="$1"; shift
+  require db
+  require files
+
+  db restoremodule roundcube "$source"
+  files restoremodule roundcube "$source"
+}
+
 roundcube_sync() {
   local host="$1"; shift
   local mode="$1"; shift

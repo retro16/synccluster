@@ -115,7 +115,7 @@ unisonsync_ready() {
 }
 
 unisonsync_files() {
-  echo "$UNISON/[^_.]*.prf"
+  ls -NU "$UNISON"/[^_.]*.prf 2>/dev/null || true
 }
 
 # Synchronize profiles from a remote host
