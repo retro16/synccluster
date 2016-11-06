@@ -88,9 +88,10 @@ roundcube_download() {
   require temp
 
   local targz="$(temp file)"
+
   wget -O"$targz" "$roundcube_url"
   rm -rf "$WWWDIR/roundcubemail-$roundcube_version" "$WWWDIR/roundcubemail"
-  tar -C "$WWWDIR" -xvzf /tmp/roundcube.tar.gz
+  tar -C "$WWWDIR" -xvzf "$targz"
   ln -fs "roundcubemail-$roundcube_version" "$WWWDIR/roundcubemail"
 
   temp release

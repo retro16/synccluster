@@ -28,7 +28,7 @@ LICENSE
 ###############################################################################
 
 
-owncloud_version="9.1.1"
+owncloud_version="9.1.0"
 owncloud_url="https://download.owncloud.org/community/owncloud-${owncloud_version}.tar.bz2"
 
 owncloud_setup() {
@@ -44,26 +44,30 @@ owncloud_setup() {
     exit 2
   fi
 
-  owncloud get
+  chown -R www-data:www-data "$CLOUDDIR"
+
+  [ -e "$WWWDIR/owncloud" ] || owncloud get
+  owncloud apache_conf | www addconf owncloud
   owncloud create_db
   owncloud init
   owncloud config
 
-  chown -R www-data:www-data "$CLOUDDIR"
   chown -R root:www-data "$CLOUDDIR/.htaccess"
 }
 
 owncloud_cleanup() {
+  require www
+  require db
+
   www delconf owncloud
   rm -rf "$WWWDIR/owncloud"
-  db del owncloud "$OWNCLOUD_PASSWORD"
+  db del owncloud owncloud
 }
 
 owncloud_get() {
   tmp="$(temp file)"
   wget -O"$tmp" "$owncloud_url"
 
-  owncloud_conf | www addconf owncloud
   tar -C "$WWWDIR" -xvjf "$tmp"
   chown -R www-data:www-data "$WWWDIR/owncloud/apps"
   chown -R www-data:www-data "$WWWDIR/owncloud/config"
@@ -73,10 +77,37 @@ owncloud_get() {
   temp release
 }
 
-owncloud_create_db() {
-  require db setup
+owncloud_apache_conf() {
+  cat <<EOF
+Alias /cloud "$WWWDIR/owncloud/"
+Redirect 301 /owncloud /cloud
 
-  db add owncloud "$OWNCLOUD_PASSWORD"
+<Directory "$WWWDIR/owncloud">
+    Options +FollowSymLinks
+    AllowOverride All
+
+    <IfModule mod_dav.c>
+      Dav off
+    </IfModule>
+
+    SetEnv HOME $WWWDIR/owncloud
+    SetEnv HTTP_HOME $WWWDIR/owncloud
+</Directory>
+
+<Directory "$CLOUDDIR/">
+  # just in case if .htaccess gets disabled
+  Require all denied
+</Directory>
+
+Redirect 301 /.well-known/carddav /cloud/remote.php/carddav
+Redirect 301 /.well-known/caldav  /cloud/remote.php/caldav
+EOF
+}
+
+owncloud_create_db() {
+  require db
+
+  db add owncloud "$OWNCLOUD_PASSWORD" owncloud
 }
 
 owncloud_init() {
@@ -84,6 +115,7 @@ owncloud_init() {
 }
 
 owncloud_config() {
+  require temp
   tmp="$(temp file)"
   head -n -1 "$WWWDIR/owncloud/config/config.php" > "$tmp"
   cat >> "$tmp" <<EOF
@@ -101,7 +133,8 @@ owncloud_config() {
   ),
 );
 EOF
-  sed -i "s/    0 => 'localhost',/    0 => '$DOMAIN',/" "$tmp"
+  require hostconf setup
+  sed -i "/    0 => 'localhost',/a    1 => '$(hostconf domain)'," "$tmp"
   chown www-data:www-data "$tmp"
   mv "$tmp" "$WWWDIR/owncloud/config/config.php"
   temp forget

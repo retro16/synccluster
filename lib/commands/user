@@ -63,31 +63,44 @@ user_cleanup() {
 user_add() {
   local login="$1"; shift
   local group="$1"; shift || group="$login"
-
-  if has master; then
-    master sc user add "$login" "$group"
-    user pull
-  else
-    newuid="$(cut -d: -f3 /etc/passwd | grep -E '100[0-9][0-9]'|sort -nr)"
-    [ "$newuid" ] && newuid="$((newuid + 1))" || newuid=10000
-    useradd -c '' -d "/home/$login" -m -N -u "$newuid" -g "$group" "$login"
+    
+  local newuid="$(cut -d: -f3 /etc/passwd | grep -E '100[0-9][0-9]'|sort -nr)"
+  [ "$newuid" ] && newuid="$((newuid + 1))" || newuid=10000
+  if ! user hasgroup "$group"; then
+    user addgroup "$group"
   fi
+  useradd -c '' -d "/home/$login" -m -N -u "$newuid" -g "$group" "$login"
 }
 
 user_del() {
   local login="$1"; shift
 
-  if has master; then
-    master sc user del "$login"
-    user pull
-  else
-    userdel -r "$login"
-  fi
+  userdel -r "$login"
 }
 
 user_has() {
   local login="$1"; shift
   if grep -E "^$login:" /etc/passwd &>/dev/null; then
+    return 0
+  fi
+  return 1
+}
+
+user_addgroup() {
+  local group="$1"
+  local newgid="$(cut -d: -f3 /etc/group | grep -E '100[0-9][0-9]'|sort -nr)"
+  [ "$newgid" ] && newgid="$((newgid + 1))" || newgid=10000
+  groupadd -f -g "$newgid" "$group"
+}
+
+user_delgroup() {
+  local group="$1"; shift
+  groupdel "$group"
+}
+
+user_hasgroup() {
+  local group="$1"; shift
+  if grep -E "^$group:" /etc/group &>/dev/null; then
     return 0
   fi
   return 1

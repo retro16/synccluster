@@ -76,7 +76,7 @@ www_addconf() {
   local conf="$1"; shift
   local target="/etc/apache2/conf-available/${SC}_$conf.conf"
   cat > "$target"
-  a2enconf "$1"
+  a2enconf "${SC}_$conf"
 }
 
 www_hasconf() {

@@ -36,8 +36,8 @@ SCMODULES=""
 
 # Call a submodule
 subcall() {
-  mod="$1"; shift
-  sub="$1"; shift
+  local mod="$1"; shift
+  local sub="$1"; shift
   if [ "$(type -t "${mod}_$sub")" = "function" ]; then
     "${mod}_$sub" "$@"
   else
@@ -48,8 +48,8 @@ subcall() {
 
 # Tell if a submodule supports a function
 cancall() {
-  mod="$1"; shift
-  sub="$1"; shift
+  local mod="$1"; shift
+  local sub="$1"; shift
   if [ "$(type -t "${mod}_$sub")" = "function" ]; then
     return 0
   fi

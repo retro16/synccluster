@@ -29,6 +29,7 @@ LICENSE
 
 
 nginx_setup() {
+  systemctl stop apache2 || true
   syspackage nginx nginx
   require ssl setup
   nginx proxy_conf > /etc/nginx/sites-available/proxy
@@ -36,6 +37,7 @@ nginx_setup() {
   ln -s ../sites-available/proxy /etc/nginx/sites-enabled/proxy
   systemctl enable nginx
   systemctl start nginx
+  systemctl start apache2 || true
 }
 
 nginx_cleanup() {
