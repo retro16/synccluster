@@ -108,6 +108,7 @@ else
 fi
 
 if [ -r "$SCCMDDIR/$subcmd" ]; then
+  SCMODULES="$SCMODULES $subcmd"
   source "$SCCMDDIR/$subcmd"
   $subcmd "${ARGS[@]}"
 else

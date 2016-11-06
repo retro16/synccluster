@@ -34,8 +34,12 @@ roundcube_setup() {
   require www setup
   require mail setup
 
-  roundcube download
+  if ! [ -d "$WWWDIR/roundcubemail" ]; then
+    roundcube download
+  fi
   roundcube install
+
+  roundcube apache_conf | www addconf roundcubemail
 }
 
 roundcube_cleanup() {
@@ -100,7 +104,7 @@ roundcube_download() {
 roundcube_install() {
   roundcube create_db
   roundcube conf > "$WWWDIR/roundcubemail/config/config.inc.php"
-  git_get https://github.com/blind-coder/rcmcarddav.git "$WWWDIR/roundcubemail/plugins/carddav"
+  #git_get https://github.com/blind-coder/rcmcarddav.git "$WWWDIR/roundcubemail/plugins/carddav"
   chown -R www-data:www-data "$WWWDIR/roundcubemail/logs"
   chown -R www-data:www-data "$WWWDIR/roundcubemail/temp"
 }
@@ -117,6 +121,7 @@ roundcube_create_db() {
 }
 
 roundcube_conf() {
+  require hostconf setup
   cat <<EOF
 <?php
 \$config = array();
@@ -125,13 +130,13 @@ roundcube_conf() {
 \$config['imap_debug'] = false;
 \$config['log_logins'] = false;
 \$config['log_session'] = false;
-\$config['db_dsnw'] = 'pgsql://roundcubemail:${ROUNDCUBE_PASSWORD}@127.0.0.1/roundcubemail'
+\$config['db_dsnw'] = 'pgsql://roundcubemail:${ROUNDCUBE_PASSWORD}@127.0.0.1/roundcubemail';
 
-\$config['default_host'] = '$DOMAIN';
+\$config['default_host'] = '$(hostconf domain)';
 \$config['default_port'] = 143;
 \$config['imap_auth_type'] = 'PLAIN';
 
-\$config['smtp_server'] = '$DOMAIN';
+\$config['smtp_server'] = '$(hostconf domain)';
 \$config['smtp_port'] = 25;
 \$config['smtp_user'] = '%u';
 \$config['smtp_pass'] = '%p';
@@ -144,10 +149,26 @@ roundcube_conf() {
 \$config['plugins'] = array(
     'archive',
     'zipdownload',
-    'carddav',
+    //'carddav',
 );
 
 \$config['skin'] = 'larry';
+EOF
+}
+
+roundcube_apache_conf() {
+  cat <<EOF
+Alias /mail "$WWWDIR/roundcubemail/"
+Redirect 301 /roundcube /mail
+Redirect 301 /roundcubemail /mail
+
+<Directory "$WWWDIR/roundcubemail">
+    Options +FollowSymLinks
+    AllowOverride All
+
+    SetEnv HOME $WWWDIR/roundcubemail
+    SetEnv HTTP_HOME $WWWDIR/roundcubemail
+</Directory>
 EOF
 }
 

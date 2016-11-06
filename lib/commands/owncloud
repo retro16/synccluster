@@ -52,6 +52,8 @@ owncloud_setup() {
   owncloud init
   owncloud config
 
+  settings save
+
   chown -R root:www-data "$CLOUDDIR/.htaccess"
 }
 
@@ -163,11 +165,20 @@ $CLOUDDIR
 EOF
 }
 
+owncloud_restore() {
+  local source="$1"; shift
+  require db
+  require files
+
+  db restoremodule owncloud "$source"
+  files restoremodule owncloud "$source"
+}
+
 owncloud_sync() {
   local host="$1"; shift
   local mode="$1"; shift
 
-  if ! contains "$mode" master standby; then return 0; fi
+  if [ "$mode" != standby ]; then return 0; fi
 
   require db
   db pull owncloud "$host"
@@ -180,7 +191,7 @@ owncloud_sync() {
 }
 
 owncloud_ready() {
-  if [ -d "$CLOUDDIR" ] && [ -e "$WWWDIR/owncloud/config/config.php" ] && has db && db has owncloud; then
+  if [ -d "$CLOUDDIR" ] && [ -e "$WWWDIR/owncloud/config/config.php" ] && has db && db has owncloud && has www && www hasconf owncloud; then
     return 0
   fi
   return 1

@@ -42,15 +42,19 @@ mail_setup() {
     exit 2
   fi
 
+  chmod 1777 "$MAILDIR"
+
   mail postfix_conf > "/etc/postfix/main.cf"
   mail procmail_conf > "/etc/procmailrc"
   mail dovecot_conf > "/etc/dovecot/dovecot.conf"
 
-  systemctl enable postfix
-  systemctl start postfix
-
   systemctl enable dovecot
-  systemctl start dovecot
+  systemctl restart dovecot
+
+  systemctl enable postfix
+  systemctl restart postfix
+
+  newaliases
 
   settings save
 }
@@ -76,6 +80,7 @@ mail_files() {
 }
 
 mail_postfix_conf() {
+  require hostconf setup
   cat <<EOF
 alias_database = hash:/etc/aliases
 alias_maps = hash:/etc/aliases
@@ -85,8 +90,8 @@ config_directory = /etc/postfix
 inet_interfaces = all
 mailbox_command = procmail -f- -a "\$USER"
 mailbox_size_limit = 0
-mydestination = $(dnsdomainname), localhost
-myhostname = $(dnsdomainname)
+mydestination = $(hostconf domain), localhost
+myhostname = $(hostconf domain)
 mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128
 myorigin = /etc/mailname
 readme_directory = no
@@ -145,10 +150,36 @@ service auth {
 }
 auth_mechanisms = plain login
 ssl = yes
-ssl_cert = </etc/ssl/certs/ssl-cert-snakeoil.pem
-ssl_key = </etc/ssl/private/ssl-cert-snakeoil.key
+ssl_cert = <$SSLCERT
+ssl_key = <$SSLKEY
 ssl_cipher_list = ALL:!LOW:!SSLv2:ALL:!aNULL:!ADH:!eNULL:!EXP:RC4+RSA:+HIGH:+MEDIUM
 EOF
+}
+
+mail_sync() {
+  local host="$1"; shift
+  local mode="$1"; shift
+
+  if [ "$mode" != standby ]; then return 0; fi
+
+  require unisonsync
+  unisonsync start "$host" "$MAILDIR"
+
+  require sshlink
+  sshlink getfiles "$host" <<< "/etc/aliases"
+
+  newaliases
+}
+
+mail_restore() {
+  local source="$1"; shift
+  require files
+
+  files restoremodule mail "$source"
+
+  newaliases
+  systemctl restart dovecot
+  systemctl restart postfix
 }
 
 mail_settings() {

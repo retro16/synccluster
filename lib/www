@@ -80,6 +80,7 @@ www_addconf() {
 }
 
 www_hasconf() {
+  local conf="$1"; shift
   if [ -e "/etc/apache2/conf-enabled/${SC}_$conf.conf" ]; then
     return 0
   fi
