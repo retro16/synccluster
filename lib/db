@@ -59,23 +59,45 @@ db_backup() {
   syspackage xz xz-utils
   syspackage postgresql-client pg_dump pg_dumpall
   pushd / &>/dev/null
+  echo "DROP DATABASE IF EXISTS $database;"
   echo "DROP ROLE IF EXISTS $user;"
   su -c "pg_dumpall --roles-only | grep -P '^(?:CREATE|DROP|ALTER) ROLE $user' " postgres
-  echo "DROP DATABASE IF EXISTS $database;"
   echo "CREATE DATABASE $database OWNER=$user;"
   su -c "pg_dump --no-tablespaces $database | xz -c -6" postgres
   popd &>/dev/null
 }
 
 # Restores a xz backup from stdin into the local postgres
-db_restore() {
-  local database="$1"; shift
+db_restorestream() {
+  local database="$1"; shift || database=postgres
 
   syspackage unxz xz-utils
   syspackage postgresql-client psql
   pushd / &>/dev/null
-  su -c 'unxz -c | psql -q $database' postgres >/dev/null
+  su -c "unxz -c | psql -q $database" postgres >/dev/null
   popd &>/dev/null
+}
+
+db_restoremodule() {
+  local module="$1"; shift
+  local source="$1"; shift
+
+  require "$module"
+
+  # Check if the module has a db
+  if ! cancall "$module" db; then return 0; fi
+
+  local dbname
+  local dbfile
+  for dbname in "$("$module" db)"; do
+    dbfile="$source/db/$dbname.xz"
+    if [ -e "$dbfile" ]; then
+      db restorestream < "$dbfile"
+    else
+      echo "Error: Backup of database $dbname missing"
+      exit 2
+    fi
+  done
 }
 
 db_add() {

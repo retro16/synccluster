@@ -189,7 +189,7 @@ EOF
         sudoers="$sudoers$user,"
         break
       fi
-    done <<< "$(cat "$T/group" | cut -d: -f4 | tr ',' '\n')"
+    done <<< "$(grep -E "^sudo:x:" "$T/group" | cut -d: -f4 | tr ',' '\n')"
     echo "${sudoers:0: -1}" >> "$T/group.new." # Remove trailing comma
     mv "$T/group.new." "$T/group.new"
   fi
@@ -282,10 +282,32 @@ user_restoregroups() {
   temp release
 }
 
+# Restore sudoers from a backup, but filter out non-existing users
 user_restoresudoers() {
   local source="$1"; shift
 
-echo TODO restoresudoers
+  local sourcegroup="$source/fs/etc/group"
+
+  if grep -E "^sudo:x:" &>/dev/null "/etc/group"; then
+    require temp
+    local group="$(temp file)"
+
+    grep -vE "^sudo:x:" /etc/group > "$group"
+    sudoers="$(grep -E "^sudo:x:" /etc/group | cut -d: -f1-3):"
+    while read user; do
+      if grep -E "^$user:" /etc/passwd; then
+        sudoers="$sudoers$user,"
+        break
+      fi
+    done <<< "$(grep -E "^sudo:x:" "$sourcegroup" | cut -d: -f4 | tr ',' '\n')"
+    echo "${sudoers:0: -1}" >> "$group" # Remove trailing comma
+    mv "$group" /etc/group
+
+    chown root:root /etc/group
+    chmod 644 /etc/group
+
+    temp release
+  fi
 }
 
 user_restore() {
@@ -315,6 +337,13 @@ user_restore() {
       # Restore missing user
       echo "$user:$pass:$uid:$gid:$name:$homedir:$shell" >> "$tmp/passwd"
       grep -E "^$name:" "$source/fs/etc/shadow" >> "$tmp/shadow"
+
+      # Restore home directory data
+      if [ -e "$source/fs/$homedir" ] && ! [ -e "$homedir" ]; then
+        cp -a "$source/fs/$homedir" "$homedir"
+      else
+        echo "Warning: could not restore home directory of user $user"
+      fi
     fi
   done
 
@@ -354,7 +383,7 @@ user_files() {
   echo /etc/shadow
   echo /etc/group
   echo /etc/gshadow
-  ls -NUd /home/*
+  echo "/home/[^.]*"
 }
 
 user() {

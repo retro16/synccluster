@@ -27,7 +27,7 @@ SOFTWARE.
 LICENSE
 ###############################################################################
 
-apt_setup() {
+aptpackage_setup() {
   local MIRROR="$(grep -E '^deb [hft]*tp://.*debian.* main' /etc/apt/sources.list | head -n 1 | sed 's;deb \([^ ]*\) [a-z/]* main.*;\1;')"
   local DISTNAME="$(grep -E '^deb [hft]*tp://.*debian.* main' /etc/apt/sources.list | head -n 1 | sed 's;deb [^ ]* \([a-z/]*\) main.*;\1;')"
 
@@ -55,27 +55,27 @@ EOF
   temp release
 }
 
-apt_cleanup() {
-  rm /etc/apt/sources.list.d/${SC}_backports.list \
-     /etc/apt/sources.list.d/${SC}_contrib.list \
-     etc/apt/sources.list.d/${SC}_firefox.list
+aptpackage_cleanup() {
+  rm -f /etc/apt/sources.list.d/${SC}_backports.list \
+        /etc/apt/sources.list.d/${SC}_contrib.list \
+        /etc/apt/sources.list.d/${SC}_firefox.list
   apt update
 }
 
-apt_ready() {
+aptpackage_ready() {
   if [ -e /etc/apt/sources.list.d/${SC}_backports.list ] && \
      [ -e /etc/apt/sources.list.d/${SC}_contrib.list ] && \
-     [ -e etc/apt/sources.list.d/${SC}_firefox.list ]; then
+     [ -e /etc/apt/sources.list.d/${SC}_firefox.list ]; then
     return 0
   fi
   return 1
 }
 
-apt_help() {
+aptpackage_help() {
   echo "apt setup: setup backport and contrib apt sources"
   echo "apt cleanup: remove these sources"
 }
 
-apt() {
-  subcall "$@"
+aptpackage() {
+  subcall aptpackage "$@"
 }

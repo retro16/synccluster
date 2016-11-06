@@ -124,6 +124,16 @@ backup_ready() {
   return 1
 }
 
+backup_sync() {
+  local host="$1"; shift
+  local mode="$1"; shift
+
+  if [ "$mode" = backup ]; then
+    require sshlink
+    sshlink getsettings "$host" BACKUP_LIST
+  fi
+}
+
 backup_settings() {
   echo BACKUP_DIR
   echo BACKUP_LIST

@@ -42,6 +42,25 @@ files_pull() {
   fi
 }
 
+# Restore files from a backup
+files_restoremodule() {
+  local module="$1"; shift
+  local source="$1"; shift
+
+  require "$module"
+
+  # Check if the module has files
+  if ! cancall "$module" files; then return 0; fi
+
+  IFS='$\n' for f in $("$module" files); do
+    if ls -NUd "$source/fs/"$f &>/dev/null; then
+      [ -e "$(dirname "$f")" ] || mkdir -p "$(dirname "$f")"
+      syspackage rsync rsync
+      rsync -a "$source/fs/"$f "$(dirname "$f")/"
+    fi
+  done
+}
+
 files() {
   subcall files "$@"
 }

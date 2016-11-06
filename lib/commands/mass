@@ -87,6 +87,12 @@ mass_files() {
   fi
 }
 
+mass_restore() {
+  local source="$1"; shift
+  require files
+  files restoremodule mass "$source"
+}
+
 mass_settings() {
   echo MASSDIR
 }

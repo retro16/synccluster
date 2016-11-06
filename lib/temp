@@ -33,11 +33,13 @@ LICENSE
 temp_dir() {
   TEMP_FILE="$(mktemp -d)"
   trap "rm -rf '$TEMP_FILE'" EXIT
+  echo "$TEMP_FILE"
 }
 
 temp_file() {
   TEMP_FILE="$(mktemp)"
   trap "rm -rf '$TEMP_FILE'" EXIT
+  echo "$TEMP_FILE"
 }
 
 temp_release() {

@@ -39,11 +39,21 @@ subcall() {
   mod="$1"; shift
   sub="$1"; shift
   if [ "$(type -t "${mod}_$sub")" = "function" ]; then
-    "${mod}_$sub"
+    "${mod}_$sub" "$@"
   else
     echo "Cannot find $SC $mod $sub"
     exit 1
   fi
+}
+
+# Tell if a submodule supports a function
+cancall() {
+  mod="$1"; shift
+  sub="$1"; shift
+  if [ "$(type -t "${mod}_$sub")" = "function" ]; then
+    return 0
+  fi
+  return 1
 }
 
 # Import a common module
@@ -148,21 +158,32 @@ optcall() {
 # Check that command-lines are available, and if some are missing, install the corresponding system package
 syspackage() {
   local package="$1"; shift
-  local commands
 
-  require apt setup
+  require aptpackage setup
 
   if [ "$#" -eq 0 ]; then
-    apt install "$package"
-    return $?
+    if apt-get -y install "$package"; then
+      return 0
+    else
+      echo "Cannot install required package $package"
+      exit 1
+    fi
+
+    return 0
   fi
 
-  for c in "${commands[@]}"; do
+  for c in "$@"; do
     if ! [ -e "$c" ] && ! which "$c" &>/dev/null; then
-      apt install "$package"
-      return $?
+      if apt-get -y install "$package"; then
+        return 0
+      else
+        echo "Cannot install required package $package"
+        exit 1
+      fi
     fi
   done
+
+  return 0
 }
 
 git_get() {

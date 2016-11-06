@@ -58,7 +58,8 @@ settings_save() {
   local foreign_settings;
   if [ "$SCSETTINGS" ]; then
     if [ -r "$SCSETTINGS" ]; then
-      foreign_settings="$(grep -E -v -f <(settings list | sed -e 's/$/=/' -e 's/^/\^/') "$SCSETTINGS")"
+      local foreign_settings_list="$(settings list | sed -e 's/$/=/' -e 's/^/\^/')"
+      foreign_settings="$(grep -E -v -f- "$SCSETTINGS" <<< "$foreign_settings_list")"
     fi
     settings print > "$SCSETTINGS".new
     echo "$foreign_settings" >> "$SCSETTINGS".new
@@ -115,7 +116,7 @@ settings_choice() {
 
   if [ -z "${!name}" ]; then
     local v="$( \
-      dialog --menu "$prompt" 0 0 0 "$@"
+      dialog --menu "$prompt" 0 0 0 "$@" 3>&1 1>&2 2>&3 3>&- \
     )"
     clear
     declare -g "$name=$v"

@@ -30,6 +30,8 @@ LICENSE
 
 ssl_setup() {
   require settings
+  syspackage openssl openssl
+
   settings prompt SSLCERT "/etc/ssl/private/ssl-cert.crt" "Path to SSL certificate (crt or pem):"
   if ! [ -r "$SSLCERT" ]; then
     echo "Certificate not found"
@@ -64,6 +66,16 @@ ssl_enabled() {
     return 0
   fi
   return 1
+}
+
+ssl_restore() {
+  local source="$1"; shift
+  files restoremodule ssl "$source"
+}
+
+ssl_files() {
+  echo "$SSLCERT"
+  echo "$SSLKEY"
 }
 
 ssl_settings() {

@@ -45,6 +45,7 @@ EOF
 master_setup() {
   require settings
   require sshlink
+echo XXX calling syspackage rsync rsync
   syspackage rsync rsync
 
   settings choice MASTER_MODE "standby" "Select relationship with the master server" \
@@ -56,8 +57,16 @@ master_setup() {
 
   if [ "$(master mode)" != "master" ]; then
     settings prompt MASTER "" "Enter master server user and host (empty if this host is the master):"
+    if [ -z "$MASTER" ]; then
+      echo "Error: master server empty"
+      exit 1
+    fi
     if ! sshlink has "$MASTER"; then
       sshlink add "$MASTER"
+    fi
+    if ! sshlink check "$MASTER"; then
+      echo "Link to $MASTER failed"
+      exit 1
     fi
     echo "Linked successfully to $MASTER"
   else

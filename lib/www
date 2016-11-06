@@ -53,6 +53,16 @@ www_setup() {
   settings save
 }
 
+www_files() {
+  echo /etc/php5/apache2/php.ini
+}
+
+www_restore() {
+  local source="$1"
+  require files
+  files restoremodule www "$source"
+}
+
 www_cleanup() {
   require settings
   unset WWWDIR
