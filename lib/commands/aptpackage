@@ -49,9 +49,9 @@ EOF
 
   require temp
   syspackage wget wget
-  local debtmp="$(temp file)"
-  wget -O"$debtmp" http://mozilla.debian.net/pkg-mozilla-archive-keyring_1.1_all.deb
-  dpkg -i "$debtmp"
+  temp file
+  wget -O"$TEMP_FILE" http://mozilla.debian.net/pkg-mozilla-archive-keyring_1.1_all.deb
+  dpkg -i "$TEMP_FILE"
   temp release
 }
 

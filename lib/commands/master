@@ -87,6 +87,7 @@ master_setup() {
     "standby")
       require ssl
       ssl sync "$MASTER" standby
+      require unisonsync setup
       require nfssrv setup
       require mail setup
       require roundcube setup
@@ -160,10 +161,14 @@ master_promote() {
 master_cron() {
   local period="$1"; shift
 
+  require user
+  user sync "$MASTER" "$(master mode)"
   broadcall sync "$MASTER" "$(master mode)"
 }
 
 master_boot() {
+  require user
+  user sync "$MASTER" "$(master mode)"
   broadcall sync "$MASTER" "$(master mode)"
 }
 
@@ -192,7 +197,38 @@ master_enabled() {
 
 master_ready() {
   if master enabled && [ "$MASTER_MODE" ] && ( [ "$(master mode)" = "master" ] || ( has sshlink && sshlink check "$MASTER" ) ); then
-    return 0
+    # Check that all packages are configured
+    case "$(master_mode)" in
+      master)
+        if has nfssrv && nfssrv ready \
+        && has mail && mail ready \
+        && has roundcube && roundcube ready \
+        && has owncloud && owncloud ready \
+        && has wstunnel && wstunnel ready; then
+          return 0
+        fi
+        ;;
+      standby)
+        if has unisonsync && unisonsync ready \
+        && has nfssrv && nfssrv ready \
+        && has mail && mail ready \
+        && has roundcube && roundcube ready \
+        && has owncloud && owncloud ready \
+        && has wstunnel && wstunnel ready; then
+          return 0
+        fi
+        ;;
+      backup)
+        if has backup && backup ready; then
+          return 0
+        fi
+        ;;
+      client)
+        if has nfsclient && nfsclient ready && has boot && boot has master; then
+          return 0
+        fi
+        ;;
+    esac
   fi
   return 1
 }

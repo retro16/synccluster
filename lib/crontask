@@ -49,6 +49,15 @@ crontask_del() {
   rm /etc/cron."$period"/"$SC"_"$module"
 }
 
+crontask_has() {
+  local module="$1"; shift
+  local period="$1"; shift
+  if [ -e /etc/cron."$period"/"$SC"_"$module" ]; then
+    return 0
+  fi
+  return 1
+}
+
 crontask() {
   subcall crontask "$@"
 }

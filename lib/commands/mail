@@ -36,7 +36,7 @@ mail_setup() {
   syspackage dovecot-imapd doveadm
   syspackage procmail procmail
 
-  settings prompt MAILDIR "" "Enter mail directory:"
+  settings prompt MAILDIR "/var/mail" "Enter mail directory:"
   if ! [ -d "$MAILDIR" ]; then
     echo "$MAILDIR does not exist."
     exit 2
@@ -166,7 +166,15 @@ mail_sync() {
   unisonsync start "$host" "$MAILDIR"
 
   require sshlink
-  sshlink getfiles "$host" <<< "/etc/aliases"
+  sshlink getfiles "$host" <<EOF
+/etc/postfix/main.cf
+/etc/aliases
+/etc/procmailrc
+/etc/dovecot/dovecot.conf
+EOF
+
+  systemctl restart postfix
+  systemctl restart dovecot
 
   newaliases
 }

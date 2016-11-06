@@ -131,36 +131,38 @@ user_sync() {
   fi
 
   require temp
-  local T="$(temp dir)"
+  temp dir
 
-  sshlink getfiles "$host" "$T" <<EOF
+  require sshlink
+  sshlink getfiles "$host" "$TEMP_FILE" <<EOF
 /etc/passwd
 /etc/shadow
 /etc/group
 /etc/gshadow
 EOF
-  cp /etc/passwd "$T"/passwd.new
-  cp /etc/shadow "$T"/shadow.new
-  cp /etc/group "$T"/group.new
-  cp /etc/gshadow "$T"/gshadow.new
+
+  cp /etc/passwd "$TEMP_FILE"/passwd.new
+  cp /etc/shadow "$TEMP_FILE"/shadow.new
+  cp /etc/group "$TEMP_FILE"/group.new
+  cp /etc/gshadow "$TEMP_FILE"/gshadow.new
 
   # Merge user files
 
-  grep -E ":x:100[0-9][0-9]:" "$T/group" | while IFS=':' read group pass gid members; do
+  grep -E ":x:100[0-9][0-9]:" "$TEMP_FILE/etc/group" | while IFS=':' read group pass gid members; do
     # Add group if missing
-    if ! grep -E "^$group:x:" "$T/group.new"; then
-      grep -E "^$group:x:" "$T/group" >> "$T/group.new"
-      grep -E "^$group:" "$T/gshadow" >> "$T/gshadow.new"
+    if ! grep -E "^$group:x:" "$TEMP_FILE/group.new"; then
+      grep -E "^$group:x:" "$TEMP_FILE/etc/group" >> "$TEMP_FILE/group.new"
+      grep -E "^$group:" "$TEMP_FILE/etc/gshadow" >> "$TEMP_FILE/gshadow.new"
     fi
   done
 
-  grep -E ":x:100[0-9][0-9]:" "$T/passwd" | while IFS=':' read user pass uid gid name homedir shell; do
-    if ! contains "$mode" master roaming && ! grep -E "^$user:" "$T/passwd.new" &>/dev/null; then
+  grep -E ":x:100[0-9][0-9]:" "$TEMP_FILE/etc/passwd" | while IFS=':' read user pass uid gid name homedir shell; do
+    if ! contains "$mode" master roaming && ! grep -E "^$user:" "$TEMP_FILE/passwd.new" &>/dev/null; then
       # A remote user has been created: add it locally
-      grep -E "^$user:" "$T/passwd" >> "$T/passwd.new"
+      grep -E "^$user:" "$TEMP_FILE/etc/passwd" >> "$TEMP_FILE/passwd.new"
 
       # Add user to the same groups as local user
-      sed -i 's;\(.*:x:[0-9]*.*[:,]local.*\);\1,'"$user"';' "$T/group.new"
+      sed -i 's;\(.*:x:[0-9]*.*[:,]local.*\);\1,'"$user"';' "$TEMP_FILE/group.new"
 
       # Create home directory from skeleton
       if ! [ -d "$homedir" ]; then
@@ -170,37 +172,37 @@ EOF
     fi
 
     # Update password
-    grep -vE "^$user:" "$T/shadow.new" > "$T/shadow.new."
-    grep -E "^$user:" "$T/shadow" >> "$T/shadow.new."
-    mv "$T/shadow.new." "$T/shadow.new"
+    grep -vE "^$user:" "$TEMP_FILE/shadow.new" > "$TEMP_FILE/shadow.new."
+    grep -E "^$user:" "$TEMP_FILE/etc/shadow" >> "$TEMP_FILE/shadow.new."
+    mv "$TEMP_FILE/shadow.new." "$TEMP_FILE/shadow.new"
   done
 
   # Update sudoers
-  if grep -E "^sudo:x:" &>/dev/null "$T/group.new"; then
-    grep -vE "^sudo:x:" "$T/group.new" > "$T/group.new."
-    sudoers="$(grep -E "^sudo:x:" "$T/group.new" | cut -d: -f1-3):"
+  if grep -E "^sudo:x:" &>/dev/null "$TEMP_FILE/group.new"; then
+    grep -vE "^sudo:x:" "$TEMP_FILE/group.new" > "$TEMP_FILE/group.new."
+    sudoers="$(grep -E "^sudo:x:" "$TEMP_FILE/group.new" | cut -d: -f1-3):"
     while read user; do
-      if grep -E "^$user:x:100[0-9][0-9]:" "$T/passwd.new"; then
+      if grep -E "^$user:x:100[0-9][0-9]:" "$TEMP_FILE/passwd.new"; then
         sudoers="$sudoers$user,"
         break
       fi
-    done <<< "$(grep -E "^sudo:x:" "$T/group" | cut -d: -f4 | tr ',' '\n')"
-    echo "${sudoers:0: -1}" >> "$T/group.new." # Remove trailing comma
-    mv "$T/group.new." "$T/group.new"
+    done <<< "$(grep -E "^sudo:x:" "$TEMP_FILE/etc/group" | cut -d: -f4 | tr ',' '\n')"
+    echo "${sudoers:0: -1}" >> "$TEMP_FILE/group.new." # Remove trailing comma
+    mv "$TEMP_FILE/group.new." "$TEMP_FILE/group.new"
   fi
 
   # Update system files
-  mv "$T/passwd.new" /etc/passwd
-  mv "$T/shadow.new" /etc/shadow
-  mv "$T/group.new" /etc/group
-  mv "$T/gshadow.new" /etc/gshadow
+  mv "$TEMP_FILE/passwd.new" /etc/passwd
+  mv "$TEMP_FILE/shadow.new" /etc/shadow
+  mv "$TEMP_FILE/group.new" /etc/group
+  mv "$TEMP_FILE/gshadow.new" /etc/gshadow
   chown root:root /etc/passwd /etc/shadow /etc/group /etc/gshadow
   chmod 644 /etc/passwd /etc/group
   chmod 600 /etc/shadow /etc/gshadow
 
   # Remove obsolete users
   grep -E ":x:100[0-9][0-9]:" /etc/passwd | while IFS=':' read user pass uid gid name homedir shell; do
-    if ! grep -E "^$user:" "$T"/passwd; then
+    if ! grep -E "^$user:" "$TEMP_FILE"/etc/passwd; then
       echo "User $user was removed remotely. Home directory left untouched."
       userdel "$user"
       if contains "$mode" standby roaming && has unisonsync; then
@@ -211,7 +213,7 @@ EOF
 
   # Remove obsolete groups
   grep -E ":x:100[0-9][0-9]:" /etc/group | while IFS=':' read group pass gid members; do
-    if ! grep -E "^$group:" "$T"/group; then
+    if ! grep -E "^$group:" "$TEMP_FILE"/etc/group; then
       echo "Group $group was removed remotely."
       groupdel "$group"
     fi
@@ -246,30 +248,31 @@ user_getgroup() {
 user_restoregroups() {
   local source="$1"; shift
 
-  if ! [ -e "$1/fs/etc/group" ] || ! [ -e "$1/fs/etc/gshadow" ]; then
+  if ! [ -e "$source/fs/etc/group" ] || ! [ -e "$source/fs/etc/gshadow" ]; then
     echo "Missing group files in the backup" 1>&2
     exit 2
   fi
 
   require temp
-  local tmp="$(temp dir)"
-  cp /etc/group "$tmp"
-  cp /etc/gshadow "$tmp"
+  temp dir
+
+  cp /etc/group "$TEMP_FILE"
+  cp /etc/gshadow "$TEMP_FILE"
 
   local name
   local password
   local gid
   local members
   grep -E ":x:100[0-9][0-9]:" "$source/fs/etc/group" | while IFS=':' read name password gid members; do
-    if ! grep -E "^$name:" "$tmp/group" &>/dev/null; then
+    if ! grep -E "^$name:" "$TEMP_FILE/group" &>/dev/null; then
       # Restore missing group
-      echo "$name:$password:$gid:$members" >> "$tmp/group"
-      grep -E "^$name:" "$source/fs/etc/gshadow" >> "$tmp/gshadow"
+      echo "$name:$password:$gid:$members" >> "$TEMP_FILE/group"
+      grep -E "^$name:" "$source/fs/etc/gshadow" >> "$TEMP_FILE/gshadow"
     fi
   done
 
-  mv "$tmp/group" /etc/group
-  mv "$tmp/gshadow" /etc/gshadow
+  mv "$TEMP_FILE/group" /etc/group
+  mv "$TEMP_FILE/gshadow" /etc/gshadow
   chown root:root /etc/group /etc/gshadow
   chmod 644 /etc/group
   chmod 600 /etc/gshadow
@@ -285,9 +288,9 @@ user_restoresudoers() {
 
   if grep -E "^sudo:x:" &>/dev/null "/etc/group"; then
     require temp
-    local group="$(temp file)"
+    temp file
 
-    grep -vE "^sudo:x:" /etc/group > "$group"
+    grep -vE "^sudo:x:" /etc/group > "$TEMP_FILE"
     sudoers="$(grep -E "^sudo:x:" /etc/group | cut -d: -f1-3):"
     while read user; do
       if grep -E "^$user:" /etc/passwd; then
@@ -295,8 +298,8 @@ user_restoresudoers() {
         break
       fi
     done <<< "$(grep -E "^sudo:x:" "$sourcegroup" | cut -d: -f4 | tr ',' '\n')"
-    echo "${sudoers:0: -1}" >> "$group" # Remove trailing comma
-    mv "$group" /etc/group
+    echo "${sudoers:0: -1}" >> "$TEMP_FILE" # Remove trailing comma
+    mv "$TEMP_FILE" /etc/group
 
     chown root:root /etc/group
     chmod 644 /etc/group
@@ -308,7 +311,7 @@ user_restoresudoers() {
 user_restore() {
   local source="$1"; shift
 
-  if ! [ -e "$1/fs/etc/passwd" ] || ! [ -e "$1/fs/etc/shadow" ]; then
+  if ! [ -e "$source/fs/etc/passwd" ] || ! [ -e "$source/fs/etc/shadow" ]; then
     echo "Missing passwd files in the backup" 1>&2
     exit 2
   fi
@@ -316,9 +319,9 @@ user_restore() {
   user restoregroups "$source"
 
   require temp
-  local tmp="$(temp dir)"
-  cp /etc/passwd "$tmp"
-  cp /etc/shadow "$tmp"
+  temp dir
+  cp /etc/passwd "$TEMP_FILE"
+  cp /etc/shadow "$TEMP_FILE"
 
   local user
   local pass
@@ -330,8 +333,8 @@ user_restore() {
   grep -E ":x:100[0-9][0-9]:" "$source/fs/etc/passwd" | while IFS=':' read user pass uid gid name homedir shell; do
     if ! user has "$user"; then
       # Restore missing user
-      echo "$user:$pass:$uid:$gid:$name:$homedir:$shell" >> "$tmp/passwd"
-      grep -E "^$name:" "$source/fs/etc/shadow" >> "$tmp/shadow"
+      echo "$user:$pass:$uid:$gid:$name:$homedir:$shell" >> "$TEMP_FILE/passwd"
+      grep -E "^$name:" "$source/fs/etc/shadow" >> "$TEMP_FILE/shadow"
 
       # Restore home directory data
       if [ -e "$source/fs/$homedir" ] && ! [ -e "$homedir" ]; then
@@ -342,8 +345,8 @@ user_restore() {
     fi
   done
 
-  mv "$tmp/passwd" /etc/passwd
-  mv "$tmp/shadow" /etc/shadow
+  mv "$TEMP_FILE/passwd" /etc/passwd
+  mv "$TEMP_FILE/shadow" /etc/shadow
   chown root:root /etc/passwd /etc/shadow
   chmod 644 /etc/passwd
   chmod 600 /etc/shadow
@@ -357,7 +360,7 @@ user_enabled() {
   if ! [ -e /etc/sudoers.d/"$SC" ]; then
     return 1
   fi
-  if has master; then
+  if has master && has crontask; then
     if crontask has user hourly; then
       return 0
     fi

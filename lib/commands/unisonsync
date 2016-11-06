@@ -30,11 +30,27 @@ LICENSE
 
 unisonsync_setup() {
   require settings
-  syspackage unison
+  syspackage unison unison
   settings prompt UNISON "/var/lib/unison" "Enter the UNISON base directory:"
   [ -d "$UNISON" ] || mkdir -p "$UNISON"
   unisonsync common_profile > "$UNISON/_common.prf"
   settings save
+}
+
+unisonsync_remotesetup() {
+  if unisonsync ready; then
+    return 0
+  fi
+
+  require settings
+  settings set UNISON "$1"
+  [ -d "$UNISON" ] || mkdir -p "$UNISON"
+
+  unisonsync setup
+}
+
+unisonsync_settings() {
+  echo UNISON
 }
 
 unisonsync_clean() {
@@ -47,13 +63,27 @@ unisonsync_clean() {
 unisonsync_add() {
   local host="$1"; shift
   local remotepath="$1"; shift
-  local localpath="$1"; shift
+  local localpath="$1"; shift || localpath="$remotepath"
 
   cat > "$UNISON/$(unisonsync profilename "$host" "$remotepath").prf" << EOF
 include _common
 root = $localpath
 root = ssh://root@$host/$remotepath
 EOF
+
+  require sshlink
+  sshlink add "$host"
+  sshlink sc "$host" unisonsync remotesetup "$UNISON"
+}
+
+unisonsync_has() {
+  local host="$1"; shift
+  local remotepath="$1"; shift
+
+  if [ -e "$UNISON/$(unisonsync profilename "$host" "$remotepath").prf" ]; then
+    return 0
+  fi
+  return 1
 }
 
 # Returns the name of the profile based on a host and a path
@@ -65,9 +95,9 @@ unisonsync_profilename() {
 
 unisonsync_del() {
   local host="$1"; shift
-  local path="$1"; shift
+  local remotepath="$1"; shift
 
-  rm "$UNISON/$(unisonsync profilename "$host" "$path").prf"
+  rm "$UNISON/$(unisonsync profilename "$host" "$remotepath").prf"
 }
 
 unisonsync_enabled() {
@@ -78,7 +108,7 @@ unisonsync_enabled() {
 }
 
 unisonsync_ready() {
-  if unisonsync enabled && [ -e "$UNISON/_common.prf" ]; then
+  if [ "$UNISON" ] && unisonsync enabled && [ -e "$UNISON/_common.prf" ] && which unison &>/dev/null; then
     return 0
   fi
   return 1
@@ -109,6 +139,7 @@ unisonsync_start() {
     unisonsync add "$host" "$remotepath" "$localpath"
   fi
 
+  export UNISON
   unison "$(unisonsync profilename "$host" "$remotepath")"
 }
 
@@ -149,7 +180,6 @@ ignore = Name .viminfo
 ignore = Name .lesshst
 ignore = Name .bash_history
 ignore = Name .bash_logout
-ignore = Name tmp
 ignore = Path Documents/HTC
 ignore = Path .local
 ignore = Path .adobe

@@ -52,13 +52,13 @@ files_restoremodule() {
   # Check if the module has files
   if ! cancall "$module" files; then return 0; fi
 
-  IFS='$\n' for f in $("$module" files); do
+  while read f; do
     if ls -NUd "$source/fs/"$f &>/dev/null; then
       [ -e "$(dirname "$f")" ] || mkdir -p "$(dirname "$f")"
       syspackage rsync rsync
-      rsync -a "$source/fs/"$f "$(dirname "$f")/"
+      rsync -vaz "$source/fs/"$f "$(dirname "$f")/" || true
     fi
-  done
+  done <<< "$("$module" files)"
 }
 
 files() {

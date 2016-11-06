@@ -91,11 +91,11 @@ roundcube_download() {
   syspackage gzip gzip
   require temp
 
-  local targz="$(temp file)"
+  temp file
 
-  wget -O"$targz" "$roundcube_url"
+  wget -O"$TEMP_FILE" "$roundcube_url"
   rm -rf "$WWWDIR/roundcubemail-$roundcube_version" "$WWWDIR/roundcubemail"
-  tar -C "$WWWDIR" -xvzf "$targz"
+  tar -C "$WWWDIR" -xvzf "$TEMP_FILE"
   ln -fs "roundcubemail-$roundcube_version" "$WWWDIR/roundcubemail"
 
   temp release

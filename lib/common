@@ -116,12 +116,12 @@ has() {
 
 # Call a method on all commands matching filter
 broadcall() {
-  local filter="$1"; shift # "all", "enabled" or "ready"
   local function="$1"; shift
+
   for f in "$SCCMDDIR"/*; do
     local mod="$(basename "$f")"
     source "$f"
-    if [ "$filter" = "all" ] || [ "$(type -t "${mod}_$filter")" != "function" ] || "$mod" "$filter"; then
+    if [ "$(type -t "${mod}_$function")" = "function" ]; then
       "$mod" "$function" "$@"
     fi
   done

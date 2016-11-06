@@ -59,7 +59,7 @@ backup_add() {
 
   sshlink add "$host"
 
-  BACKUP_LIST="$BACKUP_LIST $period_$host "
+  BACKUP_LIST="$BACKUP_LIST ${period}_$host "
 
   settings save
 }
@@ -96,18 +96,24 @@ backup_start() {
   local bhost="$1"; shift
 
   [ -d "$BACKUP_DIR/$bhost/fs" ] || mkdir -p "$BACKUP_DIR/$bhost/fs"
-  sshlink "$bhost" sc broadcall files | sshlink getfiles "$bhost" "$BACKUP_DIR/$bhost/fs"
+  sshlink sc "$bhost" broadcall files | sshlink getfiles "$bhost" "$BACKUP_DIR/$bhost/fs"
 
-  bdblist="$(sshlink "$bhost" sc broadcall db)"
+  bdblist="$(sshlink sc "$bhost" broadcall db)"
   if [ "$bdblist" ]; then
     require db
     [ -d "$BACKUP_DIR/$bhost/db" ] || mkdir -p "$BACKUP_DIR/$bhost/db"
     for bdb in $bdblist; do
       bdbuser="${bdb%%:*}"
       bdbname="${bdb#*:}"
-      sshlink "$bhost" sc db backup "$bdbuser" "$bdbname" > "$BACKUP_DIR/$bhost/db/$bdb.xz"
+      sshlink sc "$bhost" db backup "$bdbuser" "$bdbname" > "$BACKUP_DIR/$bhost/db/$bdb.xz"
     done
   fi
+}
+
+backup_restore_from() {
+  local source="$1"; shift
+
+  broadcall restore "$source"
 }
 
 backup_enabled() {

@@ -33,7 +33,6 @@ owncloud_url="https://download.owncloud.org/community/owncloud-${owncloud_versio
 
 owncloud_setup() {
   require www setup
-  require temp
   require settings
 
   settings prompt OWNCLOUD_PASSWORD "" "Owncloud admin and database password"
@@ -67,10 +66,10 @@ owncloud_cleanup() {
 }
 
 owncloud_get() {
-  tmp="$(temp file)"
-  wget -O"$tmp" "$owncloud_url"
+  temp file
+  wget -O"$TEMP_FILE" "$owncloud_url"
 
-  tar -C "$WWWDIR" -xvjf "$tmp"
+  tar -C "$WWWDIR" -xvjf "$TEMP_FILE"
   chown -R www-data:www-data "$WWWDIR/owncloud/apps"
   chown -R www-data:www-data "$WWWDIR/owncloud/config"
   chown -R www-data:www-data "$WWWDIR/owncloud/themes"
@@ -114,13 +113,15 @@ owncloud_create_db() {
 
 owncloud_init() {
   owncloud occ maintenance:install --database pgsql --database-name owncloud --database-host localhost --database-user owncloud --database-pass "${OWNCLOUD_PASSWORD}" --admin-user admin --admin-pass "${OWNCLOUD_PASSWORD}" --data-dir "$CLOUDDIR"
+  owncloud occ app:enable external
+  owncloud occ app:enable user_external
 }
 
 owncloud_config() {
   require temp
-  tmp="$(temp file)"
-  head -n -1 "$WWWDIR/owncloud/config/config.php" > "$tmp"
-  cat >> "$tmp" <<EOF
+  temp file
+  head -n -1 "$WWWDIR/owncloud/config/config.php" > "$TEMP_FILE"
+  cat >> "$TEMP_FILE" <<EOF
   'memcache.local' => '\\\\OC\\\\Memcache\\\\APCu',
   'user_backends' => 
   array (
@@ -136,9 +137,9 @@ owncloud_config() {
 );
 EOF
   require hostconf setup
-  sed -i "/    0 => 'localhost',/a    1 => '$(hostconf domain)'," "$tmp"
-  chown www-data:www-data "$tmp"
-  mv "$tmp" "$WWWDIR/owncloud/config/config.php"
+  sed -i "/    0 => 'localhost',/a    1 => '$(hostconf domain)'," "$TEMP_FILE"
+  chown www-data:www-data "$TEMP_FILE"
+  mv "$TEMP_FILE" "$WWWDIR/owncloud/config/config.php"
   temp forget
 }
 

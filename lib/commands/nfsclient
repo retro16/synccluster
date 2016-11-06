@@ -45,12 +45,13 @@ nfsclient_add() {
   local remote="$1"; shift
   local path="$1"; shift || path="$remote"
 
-  local t="$(temp file)"
-  grep -vE " $path *nfs4 " /etc/fstab > "$t"
-  cat >> "$t" <<EOF
+  require temp
+  temp file
+  grep -vE " $path *nfs4 " /etc/fstab > "$TEMP_FILE"
+  cat >> "$TEMP_FILE" <<EOF
 $host:$remote $path nfs4 rw,rsize=131072,wsize=131072 0 0
 EOF
-  mv "$t" /etc/fstab
+  mv "$TEMP_FILE" /etc/fstab
   temp forget
 
   mount "$path"
@@ -61,9 +62,10 @@ nfsclient_del() {
 
   umount "$path" || true
 
-  local t="$(temp file)"
-  grep -vE " $path *nfs4 " /etc/fstab > "$t"
-  mv "$t" /etc/fstab
+  require temp
+  temp file
+  grep -vE " $path *nfs4 " /etc/fstab > "$TEMP_FILE"
+  mv "$TEMP_FILE" /etc/fstab
   temp forget
 }
 

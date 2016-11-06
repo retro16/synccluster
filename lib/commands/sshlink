@@ -75,16 +75,32 @@ sshlink_exec() {
 sshlink_sc() {
   local host="$1"; shift || host=localhost
   if [ "$host" = "localhost" ]; then
+    if ! [ "$(type -t "$1")" = "function" ]; then
+      require "$1"
+    fi
     if "$@"; then
       return 0
     fi
     return $?
   else
-    if ssh "$host" sc "$@"; then
+    if ssh "$host" sc sshlink scremote "$@"; then
       return 0
     fi
     return $?
   fi
+}
+
+sshlink_scremote() {
+  if [ -z "$1" ]; then
+    return 1
+  fi
+  if ! [ "$(type -t "$1")" = "function" ]; then
+    require "$1"
+  fi
+  if "$@"; then
+    return 0
+  fi
+  return $?
 }
 
 # Copy remote files to a local directory.
@@ -94,9 +110,9 @@ sshlink_getfiles() {
   local target="$1"; shift || target="/"
   if [ "$host" = localhost ] && [ "$target" = "/" ]; then return 0; fi
   require temp
-  filter="$(temp file)"
-  sshlink_exclude_list > "$filter"
-  rsync -az --delete --files-from=- --filter=". $filter" "$host":/ "$target"
+  temp file
+  sshlink_exclude_list > "$TEMP_FILE"
+  rsync -vaz --delete --files-from=- --filter=". $TEMP_FILE" "$host":/ "$target" || true
   temp release
 }
 
@@ -111,7 +127,7 @@ sshlink_getsettings() {
   for m in "$@"; do
     slist="$(sshlink sc "$host" "$m" settings)"
     for s in $slist; do
-      settings set "$S" "$(sshlink sc "$host" settings get "$s")"
+      settings set "$s" "$(sshlink sc "$host" settings get "$s")"
     done
   done
 
@@ -133,7 +149,25 @@ sshlink_exclude_list() {
 - [tT]humbs.db
 - \$RECYCLE.BIN
 - Crash Reports
-- /**/Documents/HTC/**
+- .nvidia-settings-rc
+- .dmrc
+- .xscreensaver
+- .*authority
+- .xsession-errors*
+- .Trash*
+- .viminfo
+- .lesshst
+- .bash_history
+- .bash_logout
+- .local
+- .adobe
+- .audacity-data
+- .cache
+- .dbus
+- .nv
+- .wine
+- .thumbnails
+- .gstreamer-*
 EOF
 }
 
