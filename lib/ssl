@@ -75,6 +75,12 @@ ssl_sync() {
   if [ "$mode" = master ]; then return 0; fi
 
   require sshlink
+  if [ -z "$SSLCERT" ] || [ -z "$SSLKEY" ]; then
+    # Initial setup
+    require settings
+    sshlink getsettings "$host" ssl
+    settings save
+  fi
   ssl files | sshlink getfiles "$host"
 }
 

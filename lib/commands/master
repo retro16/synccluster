@@ -45,7 +45,7 @@ EOF
 master_setup() {
   require settings
   require sshlink
-echo XXX calling syspackage rsync rsync
+
   syspackage rsync rsync
 
   settings choice MASTER_MODE "standby" "Select relationship with the master server" \
@@ -85,7 +85,7 @@ echo XXX calling syspackage rsync rsync
       require wstunnel setup
       ;;
     "standby")
-      require ssl setup
+      require ssl
       ssl sync "$MASTER" standby
       require nfssrv setup
       require mail setup

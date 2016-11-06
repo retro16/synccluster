@@ -80,18 +80,11 @@ sshlink_sc() {
     fi
     return $?
   else
-    if ssh "$host" sc sshlink scremote "$@"; then
+    if ssh "$host" sc "$@"; then
       return 0
     fi
     return $?
   fi
-}
-
-# Used by sshlink sc
-sshlink_scremote() {
-  local mod="$1"; shift
-  require "$mod"
-  "$mod" "$@"
 }
 
 # Copy remote files to a local directory.
@@ -111,12 +104,12 @@ sshlink_getsettings() {
   local host="$1"; shift
   require settings
 
-  local mod
+  local m
   local slist
   local s
 
-  for mod in "$@"; do
-    slist="$(sshlink sc "$host" "$mod" settings)"
+  for m in "$@"; do
+    slist="$(sshlink sc "$host" "$m" settings)"
     for s in $slist; do
       settings set "$S" "$(sshlink sc "$host" settings get "$s")"
     done
