@@ -31,7 +31,7 @@ LICENSE
 backup_setup() {
   require settings
   require crontask
-  settings prompt BACKUP_DIR "/home/.local/backup" "Backup directory path"
+  settings prompt BACKUP_DIR "/srv/backup" "Backup directory path"
   if ! [ -d "$BACKUP_DIR" ]; then
     echo "$BACKUP_DIR not found. Aborting"
     exit 2

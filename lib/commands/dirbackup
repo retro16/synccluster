@@ -36,7 +36,7 @@ dirbackup_setup() {
   require settings
   require sshlink
   syspackage rsync rsync
-  settings prompt DIRBACKUP_ROOT "/home/.local/backup" "Enter the root path for remote backup:"
+  settings prompt DIRBACKUP_ROOT "/srv/backup" "Enter the root path for remote backup"
   if ! [ -d "$DIRBACKUP_ROOT" ]; then
     echo "Invalid backup root path"
     exit 2

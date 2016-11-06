@@ -30,7 +30,7 @@ LICENSE
 
 mass_setup() {
   require settings
-  settings prompt MASSDIR "/home/.local/mass" "Mass storage directory path"
+  settings prompt MASSDIR "/srv/mass" "Mass storage directory path"
   if ! [ -d "$MASSDIR" ]; then
     echo "$MASSDIR not found. Aborting"
     exit 2

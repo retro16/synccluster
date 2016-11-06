@@ -36,8 +36,8 @@ owncloud_setup() {
   require temp
   require settings
 
-  settings prompt OWNCLOUD_PASSWORD "" "Owncloud admin and database password:"
-  settings prompt CLOUDDIR "/home/.local/cloud" "Owncloud storage path:"
+  settings prompt OWNCLOUD_PASSWORD "" "Owncloud admin and database password"
+  settings prompt CLOUDDIR "/srv/cloud" "Owncloud storage path"
 
   if ! [ -d "$CLOUDDIR" ]; then
     echo "$CLOUDDIR not found. Aborting."

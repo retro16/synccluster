@@ -85,66 +85,82 @@ echo XXX calling syspackage rsync rsync
       require wstunnel setup
       ;;
     "standby")
-      sshlink getsettings "$MASTER" nfssrv mail roundcube owncloud wstunnel user
       require nfssrv setup
       require mail setup
       require roundcube setup
       require owncloud setup
       require wstunnel setup
       require user setup
+      require crontask
+      crontask add master daily
       ;;
     "backup")
       require backup setup
       require user setup
+      require crontask
+      crontask add master daily
       ;;
     "client")
       require nfsclient setup
       require user setup
+      require crontask
+      crontask add master daily
+      require boot
+      boot add master
       ;;
     "roaming")
       require user setup
+      require crontask
+      crontask add master daily
+      require boot
+      boot add master
       ;;
   esac
 }
 
-# get remote settings from a list of modules
-# module list is parameter list
-
-master_promote() {
-  if ! master ready; then
-    echo "Master package not configured"
-    exit 2
-  fi
-  if [ "$(master mode)" != "standby" ]; then
-    echo "$(master mode) hosts cannot be promoted to master"
-    exit 2
-  fi
-
-  require user
-  user cleanup
-
-  require settings
-  MASTER_MODE="master"
-  settings save
+master_unsupported() {
+  local newmode="$1"; shift
+  echo "Promotion from $(master mode) to $newmode not supported"
+  exit 1
 }
 
-master_demote() {
+master_promote() {
+  local newmode="$1"; shift || newmode="master"
+
   if ! master ready; then
     echo "Master package not configured"
     exit 2
   fi
-  if [ "$(master mode)" != "master" ]; then
-    echo "$(master mode) hosts cannot be put to standby"
-    exit 2
-  fi
-  
+
+  case "$(master mode)" in
+    "standby")
+      case "$newmode" in
+        "master")
+          require crontask
+          crontask del master daily
+          ;;
+        *)
+          master_unsupported "$newmode"
+          ;;
+      esac
+      ;;
+    *)
+      master_unsupported "$newmode"
+      ;;
+  esac
+
   require settings
-  require user
+  MASTER_MODE="$newmode"
+  settings save
 }
 
 master_cron() {
   local period="$1"; shift
 
+  broadcall sync "$MASTER" "$(master mode)"
+}
+
+master_boot() {
   broadcall sync "$MASTER" "$(master mode)"
 }
 

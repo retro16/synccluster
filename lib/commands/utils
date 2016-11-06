@@ -34,6 +34,43 @@ utils_setup() {
   syspackage hdparm hdparm
   syspackage iftop iftop
   syspackage smartmontools smartctl
+  syspackage vim /usr/share/doc/vim
+}
+
+# Utilities useful for a client
+utils_client() {
+  apt-get install \
+    awesome \
+    awesome-extra \
+    firefox \
+    firefox-l10n-fr \
+    vlc \
+    gnome-terminal \
+    speedcrunch \
+    gmtp \
+    pavucontrol \
+    task-xfce-desktop \
+    lightdm \
+    lightdm-gtk-greeter \
+    xscreensaver \
+    android-tools-adb \
+    rawtherapee \
+    libreoffice \
+    libreoffice-l10n-fr \
+    flashplugin-nonfree \
+    gimp \
+    audacity \
+    simple-scan \
+    solaar \
+    numlockx \
+  -y
+
+  if ! [ -e "/etc/apt/sources.list/${SC}_owncloud_client.list" ]; then
+    echo 'deb http://download.opensuse.org/repositories/isv:/ownCloud:/desktop/Debian_8.0/ /' > "/etc/apt/sources.list/${SC}_owncloud_client.list"
+    wget -qO- http://download.opensuse.org/repositories/isv:ownCloud:desktop/Debian_8.0/Release.key | apt-key add -
+    apt-get update
+    apt-get install owncloud-client
+  fi
 }
 
 utils_ready() {

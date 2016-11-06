@@ -28,18 +28,6 @@ LICENSE
 ###############################################################################
 
 
-user_help() {
-cat <<EOF
-$SC user: User management.
-
-$SC user help
-  This help
-
-$SC user pull
-  Synchronize users from the master
-EOF
-}
-
 user_setup() {
   if has master; then
     require crontask
@@ -52,12 +40,6 @@ user_setup() {
 root   ALL=NOPASSWD: ALL
 %sudo  ALL=NOPASSWD: ALL
 EOF
-}
-
-user_cleanup() {
-  if has master; then
-    crontask del user hourly
-  fi
 }
 
 user_add() {
