@@ -31,14 +31,15 @@ LICENSE
 ssl_setup() {
   require settings
   syspackage openssl openssl
+  syspackage ssl-cert "/etc/ssl/certs/ssl-cert-snakeoil.pem" "/etc/ssl/private/ssl-cert-snakeoil.key"
 
-  settings prompt SSLCERT "/etc/ssl/private/ssl-cert.crt" "Path to SSL certificate (crt or pem):"
+  settings prompt SSLCERT "/etc/ssl/certs/ssl-cert-snakeoil.pem" "Path to SSL certificate (crt or pem):"
   if ! [ -r "$SSLCERT" ]; then
     echo "Certificate not found"
     exit 2
   fi
 
-  settings prompt SSLKEY "/etc/ssl/private/ssl-cert.key" "Path to SSL key:"
+  settings prompt SSLKEY "/etc/ssl/private/ssl-cert-snakeoil.key" "Path to SSL key:"
   if ! [ -r "$SSLKEY" ]; then
     echo "Key not found"
     exit 2
