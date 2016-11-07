@@ -94,9 +94,14 @@ user_import() {
   if grep -E "^$login:" /etc/passwd; then return 0; fi
   if ! has master; then return 0; fi
 
-  master sc user export "$login" | IFS=: read uid gid
+  master sc user export "$login" | IFS=: read user pass uid gid name homedir shell
 
   useradd -c '' -d "/home/$login" -m -N -u "$uid" -g "$gid" "$login"
+
+  if ! [ -d "$homedir" ]; then
+    cp -a /etc/skel "$homedir"
+    chown -R "$uid:$gid" "$homedir"
+  fi
 
   # Update the password and other details
   user sync "$MASTER" "$(master mode)"
@@ -104,7 +109,7 @@ user_import() {
 
 user_export() {
   local login="$1"; shift
-  grep -E "^$login:" /etc/passwd | cut -d: -f3-4
+  grep -E "^$login:" /etc/passwd
 }
 
 # Free a user from a roaming machine

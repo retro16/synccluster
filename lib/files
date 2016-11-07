@@ -54,7 +54,7 @@ files_restoremodule() {
 
   syspackage rsync rsync
   if [ -d "$source/fs/" ]; then
-    "$module" files | rsync -vaz --delete --files-from=- -r "$source/fs/" "/" || true
+    "$module" files | rsync -az --delete --files-from=- -r "$source/fs/" "/" || true
   fi
 }
 

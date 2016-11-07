@@ -117,7 +117,7 @@ sshlink_getfiles() {
   require temp
   temp file EXCLUDE_LIST
   sshlink_exclude_list > "$EXCLUDE_LIST"
-  rsync -vaz --delete --files-from=- -r --filter=". $EXCLUDE_LIST" "$host"/ "$target" || true
+  rsync -az --delete --files-from=- -r --filter=". $EXCLUDE_LIST" "$host"/ "$target" || true
   temp release EXCLUDE_LIST
 }
 

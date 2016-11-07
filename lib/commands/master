@@ -112,7 +112,6 @@ master_setup() {
     "client")
       require nfsclient
       nfsclient add "$MASTER" /home
-      require mass
       sshlink getsettings "$MASTER" mass
       [ -d "$MASSDIR" ] || mkdir -p "$MASSDIR"
       nfsclient add "$MASTER" "$MASSDIR"
@@ -127,6 +126,9 @@ master_setup() {
     "roaming")
       require user setup
       require crontask
+      sshlink getsettings "$MASTER" mass
+      require mass setup
+      sshshare add "$MASTER" "$MASSDIR"
       crontask add master daily
       require boot
       boot add master
@@ -145,6 +147,11 @@ master_promote() {
 
   if ! master ready; then
     echo "Master package not configured"
+    exit 2
+  fi
+
+  if [ "$newmode" = "$(master mode)" ]; then
+    echo "Already in $newmode mode"
     exit 2
   fi
 
