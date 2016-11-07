@@ -36,12 +36,7 @@ owncloud_setup() {
   require settings
 
   settings prompt OWNCLOUD_PASSWORD "" "Owncloud admin and database password"
-  settings prompt CLOUDDIR "/srv/cloud" "Owncloud storage path"
-
-  if ! [ -d "$CLOUDDIR" ]; then
-    echo "$CLOUDDIR not found. Aborting."
-    exit 2
-  fi
+  settings prompt_path CLOUDDIR "/srv/cloud" "Owncloud storage path"
 
   chown -R www-data:www-data "$CLOUDDIR"
 

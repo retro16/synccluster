@@ -94,7 +94,7 @@ settings_get() {
 settings_prompt() {
   local name="$1"; shift
   local default="$1"; shift || default=""
-  local prompt="$1"; shift || default="Please enter the value of $name"
+  local prompt="$1"; shift || prompt="Please enter the value of $name"
 
   syspackage dialog dialog
 
@@ -107,10 +107,33 @@ settings_prompt() {
   fi
 }
 
+settings_prompt_path() {
+  local name="$1"; shift
+  local default="$1"; shift || default=""
+  local prompt="$1"; shift || prompt="Please enter the path to $name"
+
+  syspackage dialog dialog
+
+  settings_prompt "$name" "$default" "$prompt"
+  if ! [ -d "${!name}" ]; then
+    if ! [ -e "${!name}" ]; then
+      if dialog --yesno "Path ${!name} does not exist. Create it ?" 0 0; then
+        mkdir -p "${!name}"
+      else
+        echo "Missing path"
+        exit 1
+      fi
+    else
+      echo "Error: Path ${!name} exists but is not a directory"
+      exit 2
+    fi
+  fi
+}
+
 settings_choice() {
   local name="$1"; shift
-  local default="$1"; shift || default="$3"
-  local prompt="$1"; shift || default="Please enter the value of $name"
+  local default="$1"; shift
+  local prompt="$1"; shift
 
   syspackage dialog dialog
 

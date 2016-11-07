@@ -36,11 +36,7 @@ mail_setup() {
   syspackage dovecot-imapd doveadm
   syspackage procmail procmail
 
-  settings prompt MAILDIR "/var/mail" "Enter mail directory:"
-  if ! [ -d "$MAILDIR" ]; then
-    echo "$MAILDIR does not exist."
-    exit 2
-  fi
+  settings prompt_path MAILDIR "/var/mail" "Enter mail directory:"
 
   chmod 1777 "$MAILDIR"
 

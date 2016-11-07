@@ -31,8 +31,7 @@ LICENSE
 unisonsync_setup() {
   require settings
   syspackage unison unison
-  settings prompt UNISON "/var/lib/unison" "Enter the UNISON base directory:"
-  [ -d "$UNISON" ] || mkdir -p "$UNISON"
+  settings prompt_path UNISON "/var/lib/unison" "Enter the UNISON base directory:"
   unisonsync common_profile > "$UNISON/_common.prf"
   settings save
 }
