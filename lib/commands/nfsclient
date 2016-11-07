@@ -38,7 +38,7 @@ nfsclient_add() {
 
   require temp
   temp file
-  grep -vE " $path *nfs4 " /etc/fstab > "$TEMP_FILE"
+  grep -vF " $path nfs4 " /etc/fstab > "$TEMP_FILE"
   cat >> "$TEMP_FILE" <<EOF
 $host:$remote $path nfs4 rw,rsize=131072,wsize=131072,_netdev
 EOF
@@ -55,21 +55,21 @@ nfsclient_del() {
 
   require temp
   temp file
-  grep -vE " $path *nfs4 " /etc/fstab > "$TEMP_FILE"
+  grep -vF " $path nfs4 " /etc/fstab > "$TEMP_FILE"
   mv "$TEMP_FILE" /etc/fstab
   temp forget
 }
 
 nfsclient_has() {
   local path="$1"; shift
-  if grep -E " $path *nfs4 " /etc/fstab &>/dev/null && mountpoint -q "$path"; then
+  if grep -F " $path nfs4 " /etc/fstab &>/dev/null && mountpoint -q "$path"; then
     return 0
   fi
   return 1
 }
 
 nfsclient_enabled() {
-  if grep ' nfs4 ' /etc/fstab &>/dev/null; then
+  if which nfsstat &>/dev/null; then
     return 0
   fi
   return 1
