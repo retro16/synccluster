@@ -83,7 +83,7 @@ roundcube_sync() {
   local host="$1"; shift
   local mode="$1"; shift
 
-  if ! contains "$mode" master standby; then return 0; fi
+  if ! contains "$mode" standby; then return 0; fi
 
   require files
   files pull roundcube "$host"

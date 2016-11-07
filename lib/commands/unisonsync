@@ -123,7 +123,7 @@ unisonsync_sync() {
   local host="$1"; shift
   local mode="$1"; shift
 
-  if contains "$mode" backup client; then return 0; fi
+  if contains "$mode" master backup client; then return 0; fi
 
   require files
   files pull unisonsync "$host"
