@@ -66,6 +66,8 @@ utils_client() {
     sound-converter \
   -y
 
+  apt-get -y --no-install-recommends virt-manager gir1.2-spice-client-gtk-3.0
+
   apt-get -y --purge remove iceweasel firefox-esr || true
 
   if ! [ -e "/etc/apt/sources.list.d/${SC}_owncloud_client.list" ]; then
