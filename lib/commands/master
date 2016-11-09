@@ -84,24 +84,27 @@ master_setup() {
       require roundcube setup
       require owncloud setup
       require wstunnel setup
+      require user setup
+      master_allow_root_ssh
       ;;
     "standby")
       require ssl
       ssl sync "$MASTER" standby
       sshlink getsettings "$MASTER" mass unisonsync mail roundcube owncloud
       require mass setup
-      require unisonsync setup
       require nfssrv setup
       require mail setup
       require roundcube setup
       require owncloud setup
       require wstunnel setup
       require user setup
+      require unisonsync setup
       require crontask
       require sshlink
       require sshshare
       sshshare add "$MASTER" "$MASSDIR"
       crontask add master daily
+      master_allow_root_ssh
       ;;
     "backup")
       require backup setup
@@ -121,7 +124,6 @@ master_setup() {
       require boot
       boot add master
       utils client
-      user sync "$MASTER" client
       ;;
     "roaming")
       require user setup
@@ -130,10 +132,18 @@ master_setup() {
       require mass setup
       sshshare add "$MASTER" "$MASSDIR"
       crontask add master daily
+      require unisonsync setup
       require boot
       boot add master
+      utils client
       ;;
   esac
+  master pull
+}
+
+master_allow_root_ssh() {
+  sed -i 's/PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+  systemctl restart ssh
 }
 
 master_unsupported() {
@@ -167,6 +177,47 @@ master_promote() {
           ;;
       esac
       ;;
+    "master")
+      case "$newmode" in
+        "standby")
+          require unisonsync setup
+          require crontask
+          crontask add master daily
+          ;;
+        *)
+          master_unsupported "$newmode"
+          ;;
+      esac
+      ;;
+    "client")
+      case "$newmode" in
+        "roaming")
+          nfsclient del "$MASTER" /home
+          nfsclient del "$MASTER" "$MASSDIR"
+          sshshare add "$MASTER" "$MASSDIR"
+          require user
+          user cleanup_local
+          master pull
+          ;;
+        *)
+          master_unsupported "$newmode"
+          ;;
+      esac
+      ;;
+    "roaming")
+      case "$newmode" in
+        "client")
+          sshshare del "$MASTER" "$MASSDIR"
+          nfsclient add "$MASTER" /home
+          nfsclient add "$MASTER" "$MASSDIR"
+          require user
+          user cleanup_local
+          ;;
+        *)
+          master_unsupported "$newmode"
+          ;;
+      esac
+      ;;
     *)
       master_unsupported "$newmode"
       ;;
@@ -177,18 +228,19 @@ master_promote() {
   settings save
 }
 
-master_cron() {
-  local period="$1"; shift
-
+master_pull() {
   require user
   user sync "$MASTER" "$(master mode)"
   broadcall sync "$MASTER" "$(master mode)"
 }
 
+master_cron() {
+  local period="$1"; shift
+  master pull
+}
+
 master_boot() {
-  require user
-  user sync "$MASTER" "$(master mode)"
-  broadcall sync "$MASTER" "$(master mode)"
+  master pull
 }
 
 # Undo the link to the master

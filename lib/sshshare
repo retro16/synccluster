@@ -43,7 +43,7 @@ sshshare_add() {
   temp file fstab
   cat /etc/fstab > "$fstab"
   cat >> "$fstab" <<EOF
-$host:$remote $path fuse.sshfs x-systemd.automount,_netdev,idmap=user,transform_symlinks,allow_other,default_permissions 0 0
+$host:$remote $path fuse.sshfs noauto,x-systemd.automount,_netdev,idmap=user,transform_symlinks,allow_other,default_permissions 0 0
 EOF
   mv "$fstab" /etc/fstab
   temp forget fstab
@@ -60,7 +60,7 @@ sshshare_del() {
 
   require temp
   temp file fstab
-  grep -vFx "$host:$remote $path fuse.sshfs x-systemd.automount,_netdev,idmap=user,transform_symlinks,allow_other,default_permissions 0 0" /etc/fstab > "$fstab"
+  grep -vFx "$host:$remote $path fuse.sshfs noauto,x-systemd.automount,_netdev,idmap=user,transform_symlinks,allow_other,default_permissions 0 0" /etc/fstab > "$fstab"
   mv "$fstab" /etc/fstab
 
   temp forget fstab

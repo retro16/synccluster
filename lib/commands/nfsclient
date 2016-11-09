@@ -40,7 +40,7 @@ nfsclient_add() {
   temp file
   grep -vF " $path nfs4 " /etc/fstab > "$TEMP_FILE"
   cat >> "$TEMP_FILE" <<EOF
-$host:$remote $path nfs4 rw,rsize=131072,wsize=131072,_netdev
+$host:$remote $path nfs4 rw,rsize=131072,wsize=131072,_netdev,hard,noauto,x-systemd.automount
 EOF
   mv "$TEMP_FILE" /etc/fstab
   temp forget

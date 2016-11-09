@@ -51,7 +51,7 @@ sshlink_add() {
 }
 
 sshlink_has() {
-  if sshlink check; then
+  if [ -e "$HOME/.ssh/id_rsa" ] && sshlink check; then
     return 0
   fi
   return 1 

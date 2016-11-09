@@ -29,11 +29,6 @@ LICENSE
 
 
 user_setup() {
-  if has master; then
-    require crontask
-    crontask add user hourly
-  fi
-
   syspackage sudo
   # Enable passwordless sudo
   cat > /etc/sudoers.d/"$SC" <<EOF
@@ -103,8 +98,8 @@ user_import() {
     chown -R "$uid:$gid" "$homedir"
   fi
 
-  # Update the password and other details
-  user sync "$MASTER" "$(master mode)"
+  # Update the password and sync home directories
+  master pull
 }
 
 user_export() {
@@ -123,6 +118,24 @@ user_free() {
   fi
 
   userdel -r "$login"
+}
+
+# Remove local users (used to promote client to roaming)
+user_cleanup_local() {
+  require temp
+  temp file tmp
+
+  cp /etc/passwd "$tmp"
+  grep -E ":x:100[0-9][0-9]:" "$tmp" | while IFS=':' read user pass uid gid name homedir shell; do
+    userdel "$user"
+  done
+
+  cp /etc/group "$tmp"
+  grep -E ":x:100[0-9][0-9]:" "$tmp" | while IFS=':' read group pass gid members; do
+    groupdel "$group"
+  done
+
+  temp release tmp
 }
 
 user_sync() {
