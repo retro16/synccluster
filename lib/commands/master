@@ -42,6 +42,23 @@ $SC master setup [REMOTE]
 EOF
 }
 
+master__link() {
+  require settings
+  settings prompt MASTER "" "Enter master server host"
+  if [ -z "$MASTER" ]; then
+    echo "Error: master server empty"
+    exit 1
+  fi
+  if ! sshlink has "$MASTER"; then
+    sshlink add "$MASTER"
+  fi
+  if ! sshlink check_sc "$MASTER"; then
+    echo "$SC not installed on $MASTER"
+    exit 2
+  fi
+  echo "Linked successfully to $MASTER"
+}
+
 master_setup() {
   require settings
   require sshlink
@@ -56,19 +73,7 @@ master_setup() {
     "roaming" "Remote client, synchronize only selected users"
 
   if [ "$(master mode)" != "master" ]; then
-    settings prompt MASTER "" "Enter master server user and host (empty if this host is the master):"
-    if [ -z "$MASTER" ]; then
-      echo "Error: master server empty"
-      exit 1
-    fi
-    if ! sshlink has "$MASTER"; then
-      sshlink add "$MASTER"
-    fi
-    if ! sshlink check "$MASTER"; then
-      echo "Link to $MASTER failed"
-      exit 1
-    fi
-    echo "Linked successfully to $MASTER"
+    master__link
   else
     MASTER=""
   fi
@@ -180,6 +185,7 @@ master_promote() {
     "master")
       case "$newmode" in
         "standby")
+          master__link
           require unisonsync setup
           require crontask
           crontask add master daily
@@ -236,7 +242,15 @@ master_pull() {
 
 master_cron() {
   local period="$1"; shift
-  master pull
+  case "$period" in
+    daily)
+      master pull
+      ;;
+    fast)
+      require user
+      user sync
+      ;;
+  esac
 }
 
 master_boot() {

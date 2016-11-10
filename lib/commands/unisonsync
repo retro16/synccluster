@@ -36,16 +36,16 @@ unisonsync_setup() {
   settings save
 }
 
-unisonsync_remotesetup() {
-  if unisonsync ready; then
-    return 0
+unisonsync__remotesetup() {
+  # Setup a remote host to make sure that it is unison compatible
+  require sshlink
+  sshlink add "$host"
+  if ! sshlink exec "$host" which unison &>/dev/null; then
+    if ! sshlink exec "$host" apt install unison; then
+      echo "Error: unison not installed on remote host $host"
+      exit 2
+    fi
   fi
-
-  require settings
-  settings set UNISON "$1"
-  [ -d "$UNISON" ] || mkdir -p "$UNISON"
-
-  unisonsync setup
 }
 
 unisonsync_settings() {
@@ -70,9 +70,7 @@ root = $localpath
 root = ssh://root@$host/$remotepath
 EOF
 
-  require sshlink
-  sshlink add "$host"
-  sshlink sc "$host" unisonsync remotesetup "$UNISON"
+  unisonsync__remotesetup "$host"
 }
 
 unisonsync_has() {

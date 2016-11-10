@@ -195,6 +195,17 @@ sshlink_check() {
   return 1
 }
 
+sshlink_check_sc() {
+  local host="$1"; shift || host=localhost
+  if [ "$host" = "localhost" ]; then
+    return 0
+  fi
+  if ssh -n -o ConnectTimeout=1 "$host" "which '$SC' &>/dev/null"; then
+    return 0
+  fi
+  return 1
+}
+
 sshlink() {
   subcall sshlink "$@"
 }

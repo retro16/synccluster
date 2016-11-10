@@ -30,12 +30,14 @@ LICENSE
 
 modemconf_setup() {
   require boot
+  require crontask
   require settings
   syspackage wget wget
   settings prompt MODEM "$(ip route | awk '/^default/ { print $3 }')" "Please enter the IP address of the modem:"
   settings prompt DHCPSTART "10" "DHCP range start:"
   settings prompt DHCPEND "50" "DHCP range end:"
   boot add modemconf
+  crontask add modemconf daily
   settings save
 }
 
@@ -65,6 +67,14 @@ modemconf_ready() {
 }
 
 modemconf_boot() {
+  modemconf__refresh
+}
+
+modemconf_cron() {
+  modemconf__refresh
+}
+
+modemconf__refresh() {
 local ip1="${MODEM%.*}"
 local ip4="${MODEM#*.}"
 local ip2="${ip%.*}"

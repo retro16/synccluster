@@ -39,6 +39,12 @@ EOF
   systemctl restart nfs-kernel-server
 }
 
+nfssrv_cleanup() {
+  > /etc/exports
+  systemctl stop nfs-kernel-server
+  systemctl disable nfs-kernel-server
+}
+
 nfssrv_enabled() {
   if [ -e /etc/exports ] && which rpc.nfsd &>/dev/null; then
     return 0

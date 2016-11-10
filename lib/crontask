@@ -29,16 +29,28 @@ LICENSE
 
 
 crontask_cleanup() {
-  rm -f /etc/cron.*/"$SC"_*
+  rm -f /etc/cron.d/"$SC"_*_*
 }
 
 crontask_add() {
   local module="$1"; shift
-  local period="$1"; shift # period can be "hourly" "daily" "weekly" or "monthly".
+  local period="$1"; shift # period can be "fast" "hourly" "daily" "weekly" or "monthly".
 
-  cat > /etc/cron."$period"/"$SC"_"$module" <<EOF
-#!/bin/sh
-flock -w 30 -E 1 '/etc/cron.$period/$SC_$module' $SC $module cron $period "$@"
+   local perioddef
+  case "$period" in
+    fast) perioddef="*/20 * * * *";;
+    hourly) perioddef="$((RANDOM%60)) * * * *";;
+    daily) perioddef="$((RANDOM%60)) $((2+RANDOM%5)) * * *";;
+    weekly) perioddef="$((RANDOM%60)) $((2+RANDOM%5)) * * 6";;
+    monthly) perioddef="$((RANDOM%60)) $((2+RANDOM%5)) 1 * *";;
+  esac
+
+  syspackage util-linux flock
+
+  local cronfile="/etc/cron."$period"/"$SC"_"$module"_"$period""
+
+  cat > "$cronfile" <<EOF
+$perioddef root flock -w 30 -E 1 '$cronfile' $SCBIN $module cron $period $@
 EOF
   chmod +x /etc/cron."$period"/"$SC"_"$module"
 }
@@ -46,13 +58,13 @@ EOF
 crontask_del() {
   local module="$1"; shift
   local period="$1"; shift
-  rm /etc/cron."$period"/"$SC"_"$module"
+  rm /etc/cron.d/"$SC"_"$module"_"$period"
 }
 
 crontask_has() {
   local module="$1"; shift
   local period="$1"; shift
-  if [ -e /etc/cron."$period"/"$SC"_"$module" ]; then
+  if [ -e /etc/cron.d/"$SC"_"$module"_"$period" ]; then
     return 0
   fi
   return 1
