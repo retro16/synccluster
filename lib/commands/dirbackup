@@ -52,6 +52,9 @@ dirbackup_add() {
   local host="$1"; shift || host="localhost"
   local path="$1"; shift || path="/"
   require settings
+  syspackage rsync rsync
+  require sshlink
+  sshlink add "$host"
   [ -d "$DIRBACKUP_ROOT/$host/fs" ] || mkdir -p "$DIRBACKUP_ROOT/$host/fs"
   DIRBACKUP_LIST="$DIRBACKUP_LIST $host:$path "
   settings save
@@ -79,6 +82,13 @@ dirbackup_enabled() {
     return 1
   fi
   return 0
+}
+
+dirbackup_ready() {
+  if [ "$DIRBACKUP_ROOT" ] && [ -d "$DIRBACKUP_ROOT" ] && which rsync &>/dev/null; then
+    return 0
+  fi
+  return 1
 }
 
 dirbackup_cron() {
