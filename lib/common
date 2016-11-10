@@ -39,6 +39,9 @@ TRAPS=""
 subcall() {
   local mod="$1"; shift
   local sub="$1"; shift
+  if [ "${sub:0:1}" = "_" ]; then
+    echo "Cannot call $mod $sub: private function"
+  fi
   if [ "$(type -t "${mod}_$sub")" = "function" ]; then
     "${mod}_$sub" "$@"
   else

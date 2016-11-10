@@ -41,13 +41,14 @@ sshshare_add() {
   sshlink add "$host"
 
   temp file fstab
-  cat /etc/fstab > "$fstab"
+  grep -vE "[^ ]* $path[/ ]" /etc/fstab > "$fstab"
   cat >> "$fstab" <<EOF
 $host:$remote $path fuse.sshfs noauto,x-systemd.automount,_netdev,idmap=user,transform_symlinks,allow_other,default_permissions 0 0
 EOF
   mv "$fstab" /etc/fstab
   temp forget fstab
 
+  umount -R "$path"
   mount "$path"
 }
 
@@ -64,6 +65,15 @@ sshshare_del() {
   mv "$fstab" /etc/fstab
 
   temp forget fstab
+}
+
+sshshare_has() {
+  local path="$1"; shift
+
+  if grep -F " $path fuse.sshfs " /etc/fstab &>/dev/null && mountpoint -q "$path"; then
+    return 0
+  fi
+  return 1
 }
 
 sshshare() {

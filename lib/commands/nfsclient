@@ -34,17 +34,20 @@ nfsclient_add() {
   local remote="$1"; shift
   local path="$1"; shift || path="$remote"
 
+  if nfsclient has "$path"; then return 0; fi
+
   syspackage nfs-common nfsstat
 
   require temp
   temp file
-  grep -vF " $path nfs4 " /etc/fstab > "$TEMP_FILE"
+  grep -vE "[^ ]* $path[/ ]" /etc/fstab > "$TEMP_FILE"
   cat >> "$TEMP_FILE" <<EOF
 $host:$remote $path nfs4 rw,rsize=131072,wsize=131072,_netdev,hard,noauto,x-systemd.automount
 EOF
   mv "$TEMP_FILE" /etc/fstab
   temp forget
 
+  umount -R "$path"
   mount "$path"
 }
 

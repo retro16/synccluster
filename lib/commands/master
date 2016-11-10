@@ -85,7 +85,7 @@ master_setup() {
       require owncloud setup
       require wstunnel setup
       require user setup
-      master_allow_root_ssh
+      master__allow_root_ssh
       ;;
     "standby")
       require ssl
@@ -104,7 +104,7 @@ master_setup() {
       require sshshare
       sshshare add "$MASTER" "$MASSDIR"
       crontask add master daily
-      master_allow_root_ssh
+      master__allow_root_ssh
       ;;
     "backup")
       require backup setup
@@ -141,12 +141,12 @@ master_setup() {
   master pull
 }
 
-master_allow_root_ssh() {
+master__allow_root_ssh() {
   sed -i 's/PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
   systemctl restart ssh
 }
 
-master_unsupported() {
+master__unsupported() {
   local newmode="$1"; shift
   echo "Promotion from $(master mode) to $newmode not supported"
   exit 1
@@ -173,7 +173,7 @@ master_promote() {
           crontask del master daily
           ;;
         *)
-          master_unsupported "$newmode"
+          master__unsupported "$newmode"
           ;;
       esac
       ;;
@@ -185,7 +185,7 @@ master_promote() {
           crontask add master daily
           ;;
         *)
-          master_unsupported "$newmode"
+          master__unsupported "$newmode"
           ;;
       esac
       ;;
@@ -200,7 +200,7 @@ master_promote() {
           master pull
           ;;
         *)
-          master_unsupported "$newmode"
+          master__unsupported "$newmode"
           ;;
       esac
       ;;
@@ -214,12 +214,12 @@ master_promote() {
           user cleanup_local
           ;;
         *)
-          master_unsupported "$newmode"
+          master__unsupported "$newmode"
           ;;
       esac
       ;;
     *)
-      master_unsupported "$newmode"
+      master__unsupported "$newmode"
       ;;
   esac
 

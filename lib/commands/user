@@ -40,6 +40,7 @@ EOF
 user_add() {
   local login="$1"; shift
   local group="$1"; shift || group="$login"
+  local pass=""; shift || true
     
   local newuid="$(cut -d: -f3 /etc/passwd | grep -E '100[0-9][0-9]'|sort -nr)"
   [ "$newuid" ] && newuid="$((newuid + 1))" || newuid=10000
@@ -47,6 +48,11 @@ user_add() {
     user addgroup "$group"
   fi
   useradd -c '' -d "/home/$login" -m -N -u "$newuid" -g "$group" -s /bin/bash "$login"
+  if [ "$pass" ]; then
+    echo "$pass" | passwd --stdin "$login"
+  else
+    passwd "$login"
+  fi
 }
 
 user_del() {
@@ -84,14 +90,14 @@ user_hasgroup() {
 }
 
 # Import a user from the master on a roaming machine
-user_import() {
+user_roam() {
   local login="$1"; shift
   if grep -E "^$login:" /etc/passwd; then return 0; fi
   if ! has master; then return 0; fi
 
   master sc user export "$login" | IFS=: read user pass uid gid name homedir shell
 
-  useradd -c '' -d "/home/$login" -m -N -u "$uid" -g "$gid" "$login"
+  useradd -c '' -d "$homedir" -m -N -u "$uid" -g "$gid" "$login"
 
   if ! [ -d "$homedir" ]; then
     cp -a /etc/skel "$homedir"
