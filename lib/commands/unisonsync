@@ -72,6 +72,9 @@ unisonsync_add() {
     unisonsync setup
   fi
 
+  require sshlink
+  sshlink add "$host"
+
   cat > "$UNISON/$(unisonsync profilename "$host" "$remotepath" "$period").prf" << EOF
 include _common
 root = $localpath
