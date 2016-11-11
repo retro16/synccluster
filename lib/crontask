@@ -49,7 +49,7 @@ crontask_add() {
 
   syspackage util-linux flock
 
-  local cronfile="/etc/cron."$period"/"$SC"_"$module"_"$period""
+  local cronfile="/etc/cron.d/"$SC"_"$module"_"$period""
 
   cat > "$cronfile" <<EOF
 $perioddef root flock -w 30 -E 1 '$cronfile' $SCBIN $module cron $period $@
