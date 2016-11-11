@@ -115,6 +115,10 @@ unisonsync_del() {
   local period="$1"; shift || period=""
 
   rm "$UNISON/$(unisonsync profilename "$host" "$remotepath" "$period").prf"
+  if [ "$period" ] && ! ls "$UNISON/$period:"*.prf &>/dev/null; then
+    require crontask
+    crontask del unisonsync "$period"
+  fi
 }
 
 unisonsync_enabled() {
@@ -162,7 +166,7 @@ unisonsync_start() {
 }
 
 unisonsync_cron() {
-  local period="$period"; shift
+  local period="$1"; shift
 
   if ! unisonsync ready; then
     return 0;

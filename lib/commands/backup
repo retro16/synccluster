@@ -60,7 +60,7 @@ backup_add() {
   local host="${entry%%:*}"
 
   sshlink add "$host"
-  if [ "$host" != "$entry" ] && ! sshlink check_sc "$host"; then
+  if [ "$host" != "$entry" ] && ! sshlink has_sc "$host"; then
     echo "Error: $SC is not installed on $host"
     exit 1
   fi

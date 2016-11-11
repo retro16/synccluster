@@ -52,7 +52,7 @@ master__link() {
   if ! sshlink has "$MASTER"; then
     sshlink add "$MASTER"
   fi
-  if ! sshlink check_sc "$MASTER"; then
+  if ! sshlink has_sc "$MASTER"; then
     echo "$SC not installed on $MASTER"
     exit 2
   fi
@@ -283,7 +283,7 @@ master_enabled() {
 }
 
 master_ready() {
-  if master enabled && [ "$MASTER_MODE" ] && ( [ "$(master mode)" = "master" ] || ( has sshlink && sshlink check "$MASTER" ) ); then
+  if master enabled && [ "$MASTER_MODE" ] && ( [ "$(master mode)" = "master" ] || ( has sshlink && sshlink has "$MASTER" ) ); then
     # Check that all packages are configured
     case "$(master_mode)" in
       master)

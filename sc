@@ -56,6 +56,12 @@ SCCURBINDIR="$(dirname "$SCCURBIN")"
 SCINSTALLED=""
 ARGS=("$@")
 
+# Fix environment variables to sane values
+if [ "$HOME" = / ] && [ "$UID" -eq 0 ]; then
+  HOME=/root
+fi
+PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
 ### Main program ###
 
 # Command-line parsing
