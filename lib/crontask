@@ -36,7 +36,9 @@ crontask_add() {
   local module="$1"; shift
   local period="$1"; shift # period can be "fast" "hourly" "daily" "weekly" or "monthly".
 
-   local perioddef
+  if crontask has "$module" "$period"; then return 0; fi
+
+  local perioddef
   case "$period" in
     fast) perioddef="*/20 * * * *";;
     hourly) perioddef="$((RANDOM%60)) * * * *";;
@@ -57,8 +59,13 @@ EOF
 
 crontask_del() {
   local module="$1"; shift
-  local period="$1"; shift
-  rm /etc/cron.d/"$SC"_"$module"_"$period"
+  local period="$1"; shift || period=""
+
+  if [ "$period" ]; then
+    rm /etc/cron.d/"$SC"_"$module"_"$period"
+  else
+    rm /etc/cron.d/"$SC"_"$module"_*
+  fi
 }
 
 crontask_has() {

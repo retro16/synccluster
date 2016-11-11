@@ -54,8 +54,11 @@ unisonsync_settings() {
 
 unisonsync_clean() {
   require settings
-  rm -rf "$UNISON"
+  require crontask
+
   unset UNISON
+  crontask del unisonsync
+
   settings save
 }
 
@@ -63,21 +66,32 @@ unisonsync_add() {
   local host="$1"; shift
   local remotepath="$1"; shift
   local localpath="$1"; shift || localpath="$remotepath"
+  local period="$1"; shift || period=""
 
-  cat > "$UNISON/$(unisonsync profilename "$host" "$remotepath").prf" << EOF
+  if ! unisonsync ready; then
+    unisonsync setup
+  fi
+
+  cat > "$UNISON/$(unisonsync profilename "$host" "$remotepath" "$period").prf" << EOF
 include _common
 root = $localpath
 root = ssh://root@$host/$remotepath
 EOF
 
   unisonsync__remotesetup "$host"
+
+  if [ "$period" ]; then
+    require crontask
+    crontask add unisonsync "$period"
+  fi
 }
 
 unisonsync_has() {
   local host="$1"; shift
   local remotepath="$1"; shift
+  local period="$1"; shift || period=""
 
-  if [ -e "$UNISON/$(unisonsync profilename "$host" "$remotepath").prf" ]; then
+  if [ -e "$UNISON/$(unisonsync profilename "$host" "$remotepath" "$period").prf" ]; then
     return 0
   fi
   return 1
@@ -87,14 +101,17 @@ unisonsync_has() {
 unisonsync_profilename() {
   local host="$1"; shift
   local remotepath="$1"; shift
-  echo "${host}$(tr -c '[a-zA-Z0-9]' '_' <<< "$remotepath")"
+  local period="$1"; shift || period=""
+
+  echo "${period}:${host}$(tr -c '[a-zA-Z0-9]' '_' <<< "$remotepath")"
 }
 
 unisonsync_del() {
   local host="$1"; shift
   local remotepath="$1"; shift
+  local period="$1"; shift || period=""
 
-  rm "$UNISON/$(unisonsync profilename "$host" "$remotepath").prf"
+  rm "$UNISON/$(unisonsync profilename "$host" "$remotepath" "$period").prf"
 }
 
 unisonsync_enabled() {
@@ -131,13 +148,27 @@ unisonsync_start() {
   local host="$1"; shift
   local remotepath="$1"; shift
   local localpath="$1"; shift || localpath="$remotepath"
+  local period="$1"; shift || period=""
 
-  if ! unisonsync has "$host" "$remotepath"; then
-    unisonsync add "$host" "$remotepath" "$localpath"
+  if ! unisonsync has "$host" "$remotepath" "$period"; then
+    unisonsync add "$host" "$remotepath" "$localpath" "$period"
   fi
 
   export UNISON
-  unison "$(unisonsync profilename "$host" "$remotepath")"
+  unison "$(unisonsync profilename "$host" "$remotepath" "$period")"
+}
+
+unisonsync_cron() {
+  local period="$period"; shift
+
+  if ! unisonsync ready; then
+    return 0;
+  fi
+
+  export UNISON
+  for f in "$UNISON/$period:"*.prf; do
+    unison "$(basename "$f" .prf)"
+  done
 }
 
 unisonsync_common_profile() {

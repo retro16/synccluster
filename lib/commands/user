@@ -144,7 +144,7 @@ user_cleanup_local() {
   temp release tmp
 }
 
-user_sync() {
+user_pull() {
   local host="$1"; shift
   local mode="$1"; shift
 

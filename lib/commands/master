@@ -109,6 +109,7 @@ master_setup() {
       require sshshare
       sshshare add "$MASTER" "$MASSDIR"
       crontask add master daily
+      crontask add master fast
       master__allow_root_ssh
       ;;
     "backup")
@@ -126,6 +127,7 @@ master_setup() {
       require user setup
       require crontask
       crontask add master daily
+      crontask add master fast
       require boot
       boot add master
       utils client
@@ -236,7 +238,7 @@ master_promote() {
 
 master_pull() {
   require user
-  user sync "$MASTER" "$(master mode)"
+  user pull "$MASTER" "$(master mode)"
   broadcall sync "$MASTER" "$(master mode)"
 }
 
@@ -248,7 +250,7 @@ master_cron() {
       ;;
     fast)
       require user
-      user sync
+      user pull
       ;;
   esac
 }
