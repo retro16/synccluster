@@ -28,45 +28,38 @@ LICENSE
 ###############################################################################
 
 
-daemon_add() {
-  local name="$1"; shift
-  cat > "/etc/systemd/system/${SC}_damon_$name.service" <<EOF
-[Unit]
-Description=Start $name module as a daemon
-After=network-online.target
+lifeline_setup() {
+  require sshlink
+  require settings
+  require daemon
 
-[Service]
-ExecStart=$SCBIN $name daemon $@
-KillMode=process
-User=root
-Group=root
-Restart=on-failure
+  settings prompt LIFELINE_TARGET "" "Enter the lifeline target host"
+  sshlink add "$LIFELINE_TARGET"
+  daemon add lifeline
 
-[Install]
-WantedBy=multi-user.target
-EOF
-  systemctl daemon-reload
-  systemctl enable "${SC}_daemon_$name.service"
-  systemctl start "${SC}_daemon_$name.service"
+  settings save
 }
 
-daemon_del() {
-  local name="$1"; shift
-  systemctl stop "${SC}_daemon_$name.service"
-  systemctl disable "${SC}_daemon_$name.service"
-  rm -f "/etc/systemd/system/${SC}_daemon_$name.service"
-  systemctl daemon-reload
+lifeline_cleanup() {
+  require daemon
+  daemon del lifeline
 }
 
-daemon_has() {
-  local name="$1"; shift
-  if [ -e "/etc/systemd/system/${SC}_daemon_$name.service" ]; then
+lifeline_ready() {
+  if has daemon && daemon has lifeline && sshlink check "$LIFELINE_TARGET"; then
     return 0
   fi
   return 1
 }
 
-daemon() {
-  subcall daemon "$@"
+lifeline_daemon() {
+  exec ssh -o ServerAliveInterval=10 -N -R 22000:localhost:22 "$LIFELINE_TARGET"
 }
 
+lifeline_settings() {
+  echo "LIFELINE_TARGET"
+}
+
+lifeline() {
+  subcall lifeline "$@"
+}

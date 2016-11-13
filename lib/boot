@@ -30,7 +30,7 @@ LICENSE
 
 boot_add() {
   local name="$1"; shift
-  cat > "/etc/systemd/system/$name.service" <<EOF
+  cat > "/etc/systemd/system/${SC}_boot_$name.service" <<EOF
 [Unit]
 Description=Start $name module at boot
 After=network-online.target
@@ -45,19 +45,19 @@ Group=root
 WantedBy=multi-user.target
 EOF
   systemctl daemon-reload
-  systemctl enable "$name.service"
+  systemctl enable "${SC}_boot_$name.service"
 }
 
 boot_del() {
   local name="$1"; shift
-  systemctl disable "$name.service"
-  rm -f "/etc/systemd/system/$name.service"
+  systemctl disable "${SC}_boot_$name.service"
+  rm -f "/etc/systemd/system/${SC}_boot_$name.service"
   systemctl daemon-reload
 }
 
 boot_has() {
   local name="$1"; shift
-  if [ -e "/etc/systemd/system/$name.service" ]; then
+  if [ -e "/etc/systemd/system/${SC}_boot_$name.service" ]; then
     return 0
   fi
   return 1

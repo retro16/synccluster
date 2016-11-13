@@ -60,6 +60,7 @@ master__link() {
 }
 
 master_setup() {
+  local backupsource="$1"; shift || true
   require settings
   require sshlink
 
@@ -145,6 +146,14 @@ master_setup() {
       utils client
       ;;
   esac
+  if [ "$backupsource" ]; then
+    if ! [ -d "$backupsource/fs" ]; then
+      echo "$backupsource is not a valid backup path"
+      exit 1
+    fi
+    require backup
+    backup restore_from "$backupsource"
+  fi
   master pull
 }
 
