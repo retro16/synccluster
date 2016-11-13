@@ -381,13 +381,7 @@ user_restore() {
 }
 
 user_enabled() {
-  if ! [ -e /etc/sudoers.d/"$SC" ]; then
-    return 1
-  fi
-  if has master && has crontask; then
-    if crontask has user hourly; then
-      return 0
-    fi
+  if ! [ -e /etc/sudoers.d/"$SC" ] || ! which sudo &>/dev/null; then
     return 1
   fi
   return 0

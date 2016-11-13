@@ -61,6 +61,17 @@ sshlink_has() {
   return 1
 }
 
+sshlink_has_sc() {
+  local host="$1"; shift || host=localhost
+  if [ "$host" = "localhost" ]; then
+    return 0
+  fi
+  if ssh -n -o ConnectTimeout=2 -o PasswordAuthentication=no "$host" sc sshlink exec localhost exit 0; then
+    return 0
+  fi
+  return 1
+}
+
 sshlink_exec() {
   local host="$1"; shift || host=localhost
   if [ "$host" = "localhost" ]; then

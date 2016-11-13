@@ -47,14 +47,14 @@ EOF
   mv "$TEMP_FILE" /etc/fstab
   temp forget
 
-  umount -R "$path"
+  umount -R "$path" || true
   mount "$path"
 }
 
 nfsclient_del() {
   local path="$1"; shift
 
-  umount "$path" || true
+  umount -R "$path" || true
 
   require temp
   temp file

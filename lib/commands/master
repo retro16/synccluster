@@ -250,7 +250,7 @@ master_cron() {
       ;;
     fast)
       require user
-      user pull
+      user pull "$MASTER" "$(master mode)"
       ;;
   esac
 }
