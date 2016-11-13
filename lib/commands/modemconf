@@ -83,13 +83,13 @@ local ip3="${ip%.*}"
 ip4="${ip#*.}"
 
 
-wget -qO/dev/null --header="Content-Type: application/x-www-form-urlencoded" --post-data="loginUsername=admin&loginPassword=password" http://"$MODEM"/goform/login
+wget --no-check-certificate -qO/dev/null --header="Content-Type: application/x-www-form-urlencoded" --post-data="loginUsername=admin&loginPassword=password" http://"$MODEM"/goform/login
 
-wget -qO/dev/null --header="Content-Type: application/x-www-form-urlencoded" --post-data="RgLanIpAddress0=$ip1&RgLanIpAddress1=$ip2&RgLanIpAddress2=$ip3&RgLanIpAddress3=$ip4&RgDhcpServer=1&RgDhcpStartingIpAddress3=$DHCPSTART&RgDhcpEndingIpAddress3=$DHCPEND&RgDhcpLeaseDuration=86400" http://"$MODEM"/goform/WebUiRgLanParam
+wget --no-check-certificate -qO/dev/null --header="Content-Type: application/x-www-form-urlencoded" --post-data="RgLanIpAddress0=$ip1&RgLanIpAddress1=$ip2&RgLanIpAddress2=$ip3&RgLanIpAddress3=$ip4&RgDhcpServer=1&RgDhcpStartingIpAddress3=$DHCPSTART&RgDhcpEndingIpAddress3=$DHCPEND&RgDhcpLeaseDuration=86400" http://"$MODEM"/goform/WebUiRgLanParam
 
-wget -qO/dev/null --header="Content-Type: application/x-www-form-urlencoded" --post-data="RgWiFiService=1&RgWiFiSSIDBroadcast=1&RgWiFiServiceChkBox=1&RgWiFiSSIDBroadcastChkBox=1&RgWiFiPrimSSID=jm&RgWiFiModeSelected=1&RgWiFiPowerOutputSelected=100&RgWiFiNBandWidthSelected=2&RgWiFiChannelSelected=0&PrimSecurityRadio=0&PrimSecurityRadioValue=0&GNSecurityRadioValue=0&PreSharedKey=QLBV66P1EF&PreSharedKey=&Wep128NetworkKey1=00000000000000000000000001&RgWiFiApplyConfigChanges=Appliquer" http://"$MODEM"/goform/WebUiRgWiFiConfig
+wget --no-check-certificate -qO/dev/null --header="Content-Type: application/x-www-form-urlencoded" --post-data="RgWiFiService=1&RgWiFiSSIDBroadcast=1&RgWiFiServiceChkBox=1&RgWiFiSSIDBroadcastChkBox=1&RgWiFiPrimSSID=jm&RgWiFiModeSelected=1&RgWiFiPowerOutputSelected=100&RgWiFiNBandWidthSelected=2&RgWiFiChannelSelected=0&PrimSecurityRadio=0&PrimSecurityRadioValue=0&GNSecurityRadioValue=0&PreSharedKey=QLBV66P1EF&PreSharedKey=&Wep128NetworkKey1=00000000000000000000000001&RgWiFiApplyConfigChanges=Appliquer" http://"$MODEM"/goform/WebUiRgWiFiConfig
 
-wget -qO/dev/null http://"$MODEM"/logout.html
+wget --no-check-certificate -qO/dev/null http://"$MODEM"/logout.html
 }
 
 modemconf_settings() {
@@ -99,5 +99,5 @@ modemconf_settings() {
 }
 
 modemconf() {
-  subcall modemconf "@"
+  subcall modemconf "$@"
 }
