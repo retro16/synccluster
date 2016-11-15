@@ -113,12 +113,6 @@ else
   fi
 fi
 
-if [ -r "$SCCMDDIR/$subcmd" ]; then
-  SCMODULES="$SCMODULES $subcmd"
-  source "$SCCMDDIR/$subcmd"
-  $subcmd "${ARGS[@]}"
-else
-  echo "$subcmd: subcommand not found"
-  exit 1
-fi
+require "$1"
+subcall "$@"
 
