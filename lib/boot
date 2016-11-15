@@ -62,7 +62,3 @@ boot_has() {
   fi
   return 1
 }
-
-boot() {
-  subcall boot "$@"
-}

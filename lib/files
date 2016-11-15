@@ -57,7 +57,3 @@ files_restoremodule() {
     "$module" files | rsync -az --delete --files-from=- -r "$source/fs/" "/" || true
   fi
 }
-
-files() {
-  subcall files "$@"
-}

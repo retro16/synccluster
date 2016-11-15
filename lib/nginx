@@ -78,7 +78,3 @@ server {
 }
 EOF
 }
-
-nginx() {
-  subcall nginx "$@"
-}

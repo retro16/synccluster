@@ -76,7 +76,3 @@ crontask_has() {
   fi
   return 1
 }
-
-crontask() {
-  subcall crontask "$@"
-}

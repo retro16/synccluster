@@ -86,7 +86,3 @@ utils_ready() {
   fi
   return 0
 }
-
-utils() {
-  subcall utils "$@"
-}

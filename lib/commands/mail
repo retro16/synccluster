@@ -189,7 +189,3 @@ mail_restore() {
 mail_settings() {
   echo MAILDIR
 }
-
-mail() {
-  subcall mail "$@"
-}

@@ -164,7 +164,3 @@ www_ready() {
 www_settings() {
   echo WWWDIR
 }
-
-www() {
-  subcall www "$@"
-}

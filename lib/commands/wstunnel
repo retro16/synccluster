@@ -52,7 +52,3 @@ wstunnel_ready() {
 wstunnel_daemon() {
   exec /usr/local/bin/wstunnel -s 8022 -t 127.0.0.1:22
 }
-
-wstunnel() {
-  subcall wstunnel "$@"
-}

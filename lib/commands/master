@@ -359,7 +359,3 @@ master_settings() {
   echo MASTER
   echo MASTER_MODE
 }
-
-master() {
-  subcall master "$@"
-}

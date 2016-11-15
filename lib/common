@@ -74,6 +74,8 @@ require() {
       echo "Required module $mod not found"
       exit 2
     fi
+    # Add the main entry point
+    eval "$mod() { subcall $mod \"\$@\"; }"
     SCMODULES="$SCMODULES $mod"
   fi
 
@@ -97,8 +99,12 @@ has() {
     true
   elif [ -r "$SCLIBDIR/$mod" ]; then
     source "$SCLIBDIR/$mod"
+    # Add the main entry point
+    eval "$mod() { subcall $mod \"\$@\"; }"
   elif [ -r "$SCCMDDIR/$mod" ]; then
     source "$SCCMDDIR/$mod"
+    # Add the main entry point
+    eval "$mod() { subcall $mod \"\$@\"; }"
   else
     return 2
   fi
@@ -125,6 +131,8 @@ broadcall() {
   for f in "$SCCMDDIR"/*; do
     local mod="$(basename "$f")"
     source "$f"
+    # Add the main entry point
+    eval "$mod() { subcall $mod \"\$@\"; }"
     if [ "$(type -t "${mod}_$function")" = "function" ]; then
       "$mod" "$function" "$@"
     fi
@@ -140,6 +148,8 @@ cmdlist() {
     local mod="$(basename "$f")"
     if [ "$filter" ]; then
       source "$f"
+      # Add the main entry point
+      eval "$mod() { subcall $mod \"\$@\"; }"
       if [ "$(type -t "${mod}_$filter")" != "function" ] || "$mod" "$filter"; then
         echo "$mod"
       fi

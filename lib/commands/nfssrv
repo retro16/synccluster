@@ -58,7 +58,3 @@ nfssrv_ready() {
   fi
   return 1
 }
-
-nfssrv() {
-  subcall nfssrv "$@"
-}

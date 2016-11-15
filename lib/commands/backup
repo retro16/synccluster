@@ -60,7 +60,7 @@ backup_add() {
   local host="${entry%%:*}"
 
   sshlink add "$host"
-  if [ "$host" != "$entry" ] && ! sshlink has_sc "$host"; then
+  if [ "$host" = "$entry" ] && ! sshlink has_sc "$host"; then
     echo "Error: $SC is not installed on $host"
     exit 1
   fi
@@ -75,7 +75,7 @@ backup_del() {
   local period="$1"; shift || period="daily"
   require settings
 
-  BACKUP_LIST="$(sed -e "s/$period:$entry //" <<< "$BACKUP_LIST")"
+  BACKUP_LIST="$(sed -e "s;$period:$entry ;;" <<< "$BACKUP_LIST")"
 
   settings save
 }
@@ -134,7 +134,7 @@ backup_restore_from() {
 }
 
 backup_enabled() {
-  if [ "$BACKUP_LIST"] && [ "$BACKUP_DIR" ] && [ -d "$BACKUP_DIR" ]; then
+  if [ "$BACKUP_LIST" ] && [ "$BACKUP_DIR" ] && [ -d "$BACKUP_DIR" ]; then
     return 0
   fi
   return 1
@@ -165,8 +165,4 @@ backup_sync() {
 backup_settings() {
   echo BACKUP_DIR
   echo BACKUP_LIST
-}
-
-backup() {
-  subcall backup "$@"
 }

@@ -187,8 +187,3 @@ db_enabled() {
 db_settings() {
   echo PGVERSION
 }
-
-db() {
-  subcall db "$@"
-}
-

@@ -75,7 +75,3 @@ sshshare_has() {
   fi
   return 1
 }
-
-sshshare() {
-  subcall sshshare "$@"
-}

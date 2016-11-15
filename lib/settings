@@ -145,7 +145,3 @@ settings_choice() {
     declare -g "$name=$v"
   fi
 }
-
-settings() {
-  subcall settings "$@"
-}

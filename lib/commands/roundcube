@@ -184,7 +184,3 @@ EOF
 roundcube_settings() {
   echo ROUNDCUBE_PASSWORD
 }
-
-roundcube() {
-  subcall roundcube "$@"
-}

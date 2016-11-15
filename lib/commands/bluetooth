@@ -51,8 +51,3 @@ bluetooth_enabled() {
 bluetooth_boot() {
   /usr/bin/bluetoothctl <<< "power on"
 }
-
-bluetooth() {
-  subcall bluetooth "@"
-}
-

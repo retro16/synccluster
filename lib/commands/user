@@ -401,7 +401,3 @@ user_files() {
   echo /etc/gshadow
   grep -E ":x:100[0-9][0-9]:" /etc/passwd | cut -d: -f6 || true
 }
-
-user() {
-  subcall user "$@"
-}

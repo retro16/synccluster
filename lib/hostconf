@@ -60,7 +60,3 @@ hostconf_ready() {
   fi
   return 1
 }
-
-hostconf() {
-  subcall hostconf "$@"
-}

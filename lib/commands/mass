@@ -72,7 +72,3 @@ mass_restore() {
 mass_settings() {
   echo MASSDIR
 }
-
-mass() {
-  subcall mass "$@"
-}

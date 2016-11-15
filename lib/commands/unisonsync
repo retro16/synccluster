@@ -227,8 +227,3 @@ ignore = Path .thumbnails
 ignore = Path .gstreamer-*
 EOF
 }
-
-unisonsync() {
-  require master
-  subcall unisonsync "$@"
-}

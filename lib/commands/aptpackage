@@ -77,7 +77,3 @@ aptpackage_help() {
   echo "apt setup: setup backport and contrib apt sources"
   echo "apt cleanup: remove these sources"
 }
-
-aptpackage() {
-  subcall aptpackage "$@"
-}

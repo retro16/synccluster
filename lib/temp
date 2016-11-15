@@ -65,7 +65,3 @@ temp_forget() {
   trap "$TRAPS" EXIT
   unset "$varname"
 }
-
-temp() {
-  subcall temp "$@"
-}

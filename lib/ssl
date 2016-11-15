@@ -99,7 +99,3 @@ ssl_settings() {
   echo SSLCERT
   echo SSLKEY
 }
-
-ssl() {
-  subcall ssl "$@"
-}

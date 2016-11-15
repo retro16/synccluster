@@ -59,7 +59,3 @@ lifeline_daemon() {
 lifeline_settings() {
   echo "LIFELINE_TARGET"
 }
-
-lifeline() {
-  subcall lifeline "$@"
-}

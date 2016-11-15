@@ -65,8 +65,3 @@ daemon_has() {
   fi
   return 1
 }
-
-daemon() {
-  subcall daemon "$@"
-}
-
