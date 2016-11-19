@@ -324,6 +324,6 @@ fi
 
 ### Call subcommand ###
 
-require "$1"
-subcall "$@"
+require "$subcmd"
+subcall "$subcmd" "${ARGS[@]}"
 
