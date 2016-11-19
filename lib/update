@@ -31,7 +31,7 @@ update_setup() {
   require settings
   if has master && ! contains "$(master mode)" master; then
     require sshlink
-    sshlink getsettings SCUPDATEURL
+    sshlink getsettings "$MASTER" update
   fi
   settings prompt SCUPDATEURL "https://github.com/retro16/synccluster/archive/master.tar.gz" "$SC update URL"
   settings save
@@ -48,7 +48,7 @@ update_sync() {
   if contains "$mode" master; then return 0; fi
 
   require sshlink
-  sshlink getsettings "$host" SCUPDATEURL
+  sshlink getsettings "$host" update
 }
 
 update_start() {
