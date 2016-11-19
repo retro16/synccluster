@@ -31,6 +31,7 @@ set -e
 
 # Defaults
 SC="sc"
+SCBUILD=1001 # Build number (major * 1000 + minor)
 SCROOTDIR=""
 SCPREFIX="$SCROOTDIR/usr/local"
 SCLIBDIR="$SCPREFIX/lib/$SC"
@@ -118,6 +119,7 @@ require() {
   elif [ "$setup" = ready ]; then
     if [ "$(type -t "${mod}_ready")" = "function" ] && ! "$mod" ready; then
       echo "Module $mod found but not set up"
+      return 1
     fi
   fi
 }
@@ -150,6 +152,15 @@ has() {
     fi
   fi
   return 0
+}
+
+# Reload all loaded modules from files
+reload_modules() {
+  local modlist="$SCMODULES"
+  SCMODULES=""
+  for mod in $modlist; do
+    require "$mod"
+  done
 }
 
 # Call a method on all commands matching filter

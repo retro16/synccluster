@@ -255,6 +255,7 @@ master_cron() {
   local period="$1"; shift
   case "$period" in
     daily)
+      master update_sc
       master pull
       ;;
     fast)
@@ -265,6 +266,7 @@ master_cron() {
 }
 
 master_boot() {
+  master update_sc
   master pull
 }
 
@@ -345,6 +347,29 @@ master_exec() {
     fi
   fi
   return $rv
+}
+
+master_buildnumber() {
+  echo "$SCBUILD"
+}
+
+master_update_sc() {
+  if [ "$MASTER" ]; then
+    require sshlink
+    local remotebuild="$(sshlink sc "$MASTER" master buildnumber)"
+    if [ "$remotebuild" -gt "$SCBUILD" ]; then
+      if [ "$((remotebuild/1000))" -ne "$((SCBUILD/1000))" ]; then
+        echo "Cannot update $SC from $MASTER: major version number differ"
+        return 1
+      fi
+      echo "Updating $SC from $MASTER"
+      sshlink getfiles "$MASTER" <<EOF
+$SCBIN
+$SCLIBDIR
+EOF
+      reload_modules
+    fi
+  fi
 }
 
 master_status() {
