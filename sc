@@ -63,10 +63,229 @@ PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 ### Main program ###
 
-# Command-line parsing
+# Initialization
+SCMODULES=""
+TRAPS=""
+
+### Global functions ###
+
+# Call a submodule
+subcall() {
+  local mod="$1"; shift
+  local sub="$1"; shift
+  if [ "${sub:0:1}" = "_" ]; then
+    echo "Cannot call $mod $sub: private function"
+  fi
+  if [ "$(type -t "${mod}_$sub")" = "function" ]; then
+    "${mod}_$sub" "$@"
+  else
+    echo "Cannot find $SC $mod $sub"
+    exit 1
+  fi
+}
+
+# Tell if a submodule supports a function
+cancall() {
+  local mod="$1"; shift
+  local sub="$1"; shift
+  if [ "$(type -t "${mod}_$sub")" = "function" ]; then
+    return 0
+  fi
+  return 1
+}
+
+# Import a common module
+require() {
+  local mod="$1"; shift
+  local setup="$1"; shift || true
+
+  if [[ " $SCMODULES " != *" $mod "* ]]; then
+    if [ -r "$SCLIBDIR/$mod" ]; then
+      source "$SCLIBDIR/$mod"
+    else
+      echo "Required module $mod not found"
+      exit 2
+    fi
+    # Add the main entry point
+    eval "$mod() { subcall $mod \"\$@\"; }"
+    SCMODULES="$SCMODULES $mod"
+  fi
+
+  if [ "$setup" = setup ]; then
+    if [ "$(type -t "${mod}_ready")" = "function" ] && [ "$(type -t "${mod}_setup")" = "function" ] && ! "$mod" ready; then
+      "$mod" setup
+    fi
+  elif [ "$setup" = ready ]; then
+    if [ "$(type -t "${mod}_ready")" = "function" ] && ! "$mod" ready; then
+      echo "Module $mod found but not set up"
+    fi
+  fi
+}
+
+# Import an optional module
+has() {
+  local mod="$1"; shift
+
+  if [[ " $SCMODULES " == *" $mod "* ]]; then
+    # Already loaded
+    true
+  elif [ -r "$SCLIBDIR/$mod" ]; then
+    source "$SCLIBDIR/$mod"
+    # Add the main entry point
+    eval "$mod() { subcall $mod \"\$@\"; }"
+  else
+    return 2
+  fi
+  SCMODULES="$SCMODULES $mod"
+  if [ "$(type -t "${mod}_enabled")" = "function" ]; then
+    if ! "${mod}_enabled"; then
+      # The module does not want to exist !
+      return 1
+    fi
+  fi
+  if [ "$(type -t "${mod}_ready")" = "function" ]; then
+    if ! "${mod}_ready"; then
+      # The module is not set up !
+      return 1
+    fi
+  fi
+  return 0
+}
+
+# Call a method on all commands matching filter
+broadcall() {
+  local function="$1"; shift
+
+  for f in "$SCLIDDIR"/*; do
+    local mod="$(basename "$f")"
+    source "$f"
+    # Add the main entry point
+    eval "$mod() { subcall $mod \"\$@\"; }"
+    if [ "$(type -t "${mod}_$function")" = "function" ]; then
+      "$mod" "$function" "$@"
+    fi
+  done
+}
+
+# Return the list of all commands.
+# takes an optional filter function
+cmdlist() {
+  local filter="$1"; shift || true
+
+  for f in "$SCLIBDIR"/*; do
+    local mod="$(basename "$f")"
+    if [ "$filter" ]; then
+      source "$f"
+      # Add the main entry point
+      eval "$mod() { subcall $mod \"\$@\"; }"
+      if [ "$(type -t "${mod}_$filter")" != "function" ] || "$mod" "$filter"; then
+        echo "$mod"
+      fi
+    else
+      echo "$mod"
+    fi
+  done
+}
+
+# Optionally call a function. Returns true if function missing
+optcall() {
+  local mod="$1"; shift
+  local function="$1"; shift
+
+  if has "$mod" && [ "$(type -t "${mod}_$function")" = "function" ]; then
+    "$mod" "$function" "$@"
+  fi
+}
+
+# Check that command-lines are available, and if some are missing, install the corresponding system package
+syspackage() {
+  local package="$1"; shift
+
+  require aptpackage setup
+
+  if [ "$#" -eq 0 ]; then
+    if apt-get -y install "$package"; then
+      return 0
+    else
+      echo "Cannot install required package $package"
+      exit 1
+    fi
+
+    return 0
+  fi
+
+  for c in "$@"; do
+    if ! [ -e "$c" ] && ! which "$c" &>/dev/null; then
+      if apt-get -y install "$package"; then
+        return 0
+      else
+        echo "Cannot install required package $package"
+        exit 1
+      fi
+    fi
+  done
+
+  return 0
+}
+
+git_get() {
+  local url="$1"
+  local target="$2"
+  syspackage git git
+
+  if [ -d "$target/.git" ]; then
+    pushd "$target" &>/dev/null
+    git clean -dfx
+    git pull
+    popd &>/dev/null
+  elif [ -d "$target" ]; then
+    rm -rf "$target"
+    git clone "$url" "$target"
+  else
+    git clone "$url" "$target"
+  fi
+}
+
+# Returns true if the first parameter is equal to any other parameter
+# example:
+#  contains standby master standby client
+#  Returns true
+contains() {
+  local value="$1"; shift
+  for pattern in "$@"; do
+    if [ "$value" = "$pattern" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Install function
+install_sc() {
+  # Install SC
+  mkdir -p "$(dirname "$SCBIN")" || true
+  cp "$SCCURBIN" "$SCBIN"
+  chown root:root "$SCBIN"
+  chmod u+rwx,g+rx,o+rx "$SCBIN"
+
+  rm -rf "$SCLIBDIR" || true
+  mkdir -p "$(dirname "$SCLIBDIR")" || true
+  cp -r "$SCCURBINDIR/lib" "$SCLIBDIR"
+  chown -R root:root "$SCLIBDIR"
+  chmod -R u+rwX,g+rX,o+rX "$SCLIBDIR"
+
+  # Run post install operations
+  require settings
+  settings save
+  echo "$SC installed"
+}
+
+### Command-line parsing ###
 
 subcmd="${ARGS[0]}"
 ARGS=("${ARGS[@]:1}")
+
+### Check install and privileges ###
 
 if [ "$UID" -ne 0 ]; then
   echo "This program requires root privileges."
@@ -75,24 +294,15 @@ fi
 
 if [ -r "$SCLIBDIR/common" ] && [ "$subcmd" != "install" ]; then
   SCINSTALLED=1
-  source "$SCLIBDIR/common"
 else
   # Not installed
-  if [ -r "$SCCURBINDIR/lib/common" ]; then
-    source "$SCCURBINDIR/lib/common"
-  else
+  if ! [ -d "$SCCURBINDIR/lib" ]; then
     echo "$SC cannot be installed."
     echo "Error: lib directory not found"
     exit 1
   fi
   if [ "$subcmd" = "install" ]; then
-    if [ -r "$SCCURBINDIR/lib/commands/install" ]; then
-      source "$SCCURBINDIR/lib/commands/install"
-      install
-    else
-      echo "Error: Install module not found."
-      exit 1
-    fi
+    install_sc
     exit 0
   else
     echo "$SC must be installed."
@@ -100,6 +310,8 @@ else
     echo " # $SC install"
   fi
 fi
+
+### Call subcommand ###
 
 require "$1"
 subcall "$@"
