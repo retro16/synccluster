@@ -35,6 +35,7 @@ utils_setup() {
   syspackage iftop iftop
   syspackage smartmontools smartctl
   syspackage vim /usr/share/doc/vim
+  syspackage git git
 }
 
 # Utilities useful for a client
@@ -81,6 +82,7 @@ utils_ready() {
   || ! which ntpq &>/dev/null \
   || ! which hdparm &>/dev/null \
   || ! which iftop &>/dev/null \
+  || ! which git &>/dev/null \
   || ! which smartctl &>/dev/null; then
     return 1
   fi

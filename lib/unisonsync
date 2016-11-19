@@ -219,15 +219,24 @@ ignore = Name .viminfo
 ignore = Name .lesshst
 ignore = Name .bash_history
 ignore = Name .bash_logout
+ignore = Name ownCloud
+ignore = Name tmp
+ignore = Name Download*
+ignore = Name Téléchargements
 ignore = Path Documents/HTC
 ignore = Path .local
 ignore = Path .adobe
 ignore = Path .audacity-data
-ignore = Path .cache
 ignore = Path .dbus
 ignore = Path .nv
 ignore = Path .wine
 ignore = Path .thumbnails
 ignore = Path .gstreamer-*
 EOF
+}
+
+unisonsync_upgrade_1002() {
+  if unisonsync ready; then
+    unisonsync common_profile > "$UNISON/_common.prf"
+  fi
 }

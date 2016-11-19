@@ -163,6 +163,7 @@ sshlink_exclude_list() {
 - .[cC]ache/
 - [lL]ock
 - .parentlock
+- .[lL]ock
 - *.nps
 - *~
 - .*~
@@ -183,12 +184,16 @@ sshlink_exclude_list() {
 - .local
 - .adobe
 - .audacity-data
-- .cache
 - .dbus
 - .nv
 - .wine
 - .thumbnails
 - .gstreamer-*
+- .unison.*
+- ownCloud
+- tmp
+- Download.*
+- Téléchargements
 EOF
 }
 

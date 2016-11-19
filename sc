@@ -31,7 +31,7 @@ set -e
 
 # Defaults
 SC="sc"
-SCVERSION=1001 # Version number (major * 1000 + minor)
+SCVERSION=1002 # Version number (major * 1000 + minor)
 SCROOTDIR=""
 SCPREFIX="$SCROOTDIR/usr/local"
 SCLIBDIR="$SCPREFIX/lib/$SC"
