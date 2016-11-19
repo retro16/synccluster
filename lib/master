@@ -356,7 +356,11 @@ master_buildnumber() {
 master_update_sc() {
   if [ "$MASTER" ]; then
     require sshlink
-    local remotebuild="$(sshlink sc "$MASTER" master buildnumber)"
+    local remotebuild="$(sshlink sc "$MASTER" master buildnumber || true)"
+    if [ -z "$remotebuild" ]; then
+      echo "$SC on $MASTER does not support update"
+      return 0
+    fi
     if [ "$remotebuild" -gt "$SCBUILD" ]; then
       if [ "$((remotebuild/1000))" -ne "$((SCBUILD/1000))" ]; then
         echo "Cannot update $SC from $MASTER: major version number differ"
