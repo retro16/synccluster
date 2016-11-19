@@ -76,3 +76,7 @@ crontask_has() {
   fi
   return 1
 }
+
+crontask_list() {
+  ls /etc/cron.d/${SC}_* 2>/dev/null | sed -e 's/.*\/$SC_\(.*\)$/\1/'
+}

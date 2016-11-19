@@ -80,6 +80,19 @@ backup_del() {
   settings save
 }
 
+backup_has() {
+  local entry="$1"; shift
+  local period="$1"; shift || period="daily"
+
+  [[ " $BACKUP_LIST " = *" $period:$entry "* ]]
+}
+
+backup_list() {
+  for b in $BACKUP_LIST; do
+    echo $b
+  done
+}
+
 backup_cron() {
   local period="$1"; shift
 

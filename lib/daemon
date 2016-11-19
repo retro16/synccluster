@@ -38,8 +38,8 @@ After=network-online.target
 [Service]
 ExecStart=$SCBIN $name daemon $@
 KillMode=process
-User=root
-Group=root
+User=$USER
+Group=$(groups | cut -d' ' -f1)
 Restart=on-failure
 
 [Install]
@@ -64,4 +64,8 @@ daemon_has() {
     return 0
   fi
   return 1
+}
+
+daemon_list() {
+  ls /etc/systemd/system/${SC}_daemon_* 2>/dev/null | sed -e 's/.*_daemon_\(.*\)\.service$/\1/'
 }

@@ -75,3 +75,7 @@ sshshare_has() {
   fi
   return 1
 }
+
+sshshare_list() {
+  grep -F " $path fuse.sshfs " /etc/fstab | awk '{print $1,$2}' | tr ':' ' '
+}

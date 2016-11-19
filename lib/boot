@@ -38,8 +38,8 @@ After=network-online.target
 [Service]
 Type=oneshot
 ExecStart=$SCBIN $name boot $@
-User=root
-Group=root
+User=$USER
+Group=$(groups | cut -d' ' -f1)
 
 [Install]
 WantedBy=multi-user.target
@@ -61,4 +61,8 @@ boot_has() {
     return 0
   fi
   return 1
+}
+
+boot_list() {
+  ls /etc/systemd/system/${SC}_boot_* 2>/dev/null | sed -e 's/.*_boot_\(.*\)\.service$/\1/'
 }

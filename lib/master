@@ -56,6 +56,7 @@ master__link() {
     echo "$SC not installed on $MASTER"
     exit 2
   fi
+  master update_sc
   echo "Linked successfully to $MASTER"
 }
 
@@ -66,7 +67,7 @@ master_setup() {
 
   syspackage rsync rsync
 
-  settings choice MASTER_MODE "standby" "Select relationship with the master server" \
+  settings choice MASTER_MODE "master" "Select relationship with the master server" \
      "master" "Master server, hosts all services" \
     "standby" "Standby server, synchronize periodically all services" \
      "backup" "Backup server, only stores data backup" \
@@ -253,9 +254,9 @@ master_pull() {
 
 master_cron() {
   local period="$1"; shift
+  master update_sc
   case "$period" in
     daily)
-      master update_sc
       master pull
       ;;
     fast)

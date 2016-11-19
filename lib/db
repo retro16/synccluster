@@ -140,6 +140,12 @@ db_has() {
   return 1
 }
 
+db_list() {
+  pushd / &>/dev/null
+  su -c "psql -tAc \"SELECT datname FROM pg_database;\"" postgres | grep -v -e template0 -e template1 -e postgres
+  popd &>/dev/null
+}
+
 db_sql() {
   local user="$1"; shift
   local password="$1"; shift

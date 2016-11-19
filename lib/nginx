@@ -56,8 +56,8 @@ cat <<EOF
 client_max_body_size 513M;
 server {
   listen 443 ssl default_server;
-  ssl_certificate /etc/ssl/certs/coulon-jm.fr.crt;
-  ssl_certificate_key /etc/ssl/private/coulon-jm.fr.key;
+  ssl_certificate $SSLCERT;
+  ssl_certificate_key $SSLKEY;
   root /var/www/html;
   index index.html index.php;
   client_max_body_size 513M;

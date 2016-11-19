@@ -78,7 +78,7 @@ unisonsync_add() {
   cat > "$UNISON/$(unisonsync profilename "$host" "$remotepath" "$period").prf" << EOF
 include _common
 root = $localpath
-root = ssh://root@$host/$remotepath
+root = ssh://$USER@$host/$remotepath
 EOF
 
   unisonsync__remotesetup "$host"
@@ -98,6 +98,10 @@ unisonsync_has() {
     return 0
   fi
   return 1
+}
+
+unisonsync_list() {
+  ls "$UNISON"/*:*.prf 2>/dev/null | sed -e 's/.*\/\([a-z]*:.*\)\.prf$/\1/'
 }
 
 # Returns the name of the profile based on a host and a path
