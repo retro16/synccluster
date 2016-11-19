@@ -35,7 +35,6 @@ SCROOTDIR=""
 SCPREFIX="$SCROOTDIR/usr/local"
 SCLIBDIR="$SCPREFIX/lib/$SC"
 SCBIN="$SCPREFIX/sbin/$SC"
-SCCMDDIR="$SCLIBDIR/commands"
 SCDEF="$SCROOTDIR/etc/default/$SC"
 SCSETTINGS="$SCROOTDIR/etc/$SC"
 
@@ -65,24 +64,13 @@ PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 ### Main program ###
 
 # Command-line parsing
-if [ -z "${ARGS[0]}" ] || [ "${ARGS[0]}" = "--help" ]; then
-  echo "$SC usage:"
-  echo "$SC subcommand [PARAMETERS]"
-  if [ -d "$SCCMDDIR" ]; then
-    echo "Available subcommands:"
-    for f in "$SCCMDDIR"/*; do
-      echo "$(basename "$f")"
-    done
-  fi
-  exit 1
-fi
 
 subcmd="${ARGS[0]}"
 ARGS=("${ARGS[@]:1}")
 
 if [ "$UID" -ne 0 ]; then
-echo "This program requires root privileges."
-exit 1
+  echo "This program requires root privileges."
+  exit 1
 fi
 
 if [ -r "$SCLIBDIR/common" ] && [ "$subcmd" != "install" ]; then
