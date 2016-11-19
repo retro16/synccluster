@@ -60,7 +60,7 @@ update_start() {
   "$TEMP_FILE"/*/"$SC" install
   temp release
 
-  exec "$SCBIN" update upgrade "$SCBUILD"
+  exec "$SCBIN" update upgrade "$SCVERSION"
 }
 
 update_upgrade() {
