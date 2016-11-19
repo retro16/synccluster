@@ -31,7 +31,7 @@ set -e
 
 # Defaults
 SC="sc"
-SCBUILD=1001 # Build number (major * 1000 + minor)
+SCVERSION=1001 # Version number (major * 1000 + minor)
 SCROOTDIR=""
 SCPREFIX="$SCROOTDIR/usr/local"
 SCLIBDIR="$SCPREFIX/lib/$SC"
@@ -160,6 +160,18 @@ reload_modules() {
   SCMODULES=""
   for mod in $modlist; do
     require "$mod"
+  done
+}
+
+# Call upgrade_NUMBER to upgrade all modules from an old version to a newer one
+upgrade_modules() {
+  local old="$1"; shift
+  local new="$1"; shift || new="$SCVERSION"
+
+  reload_modules
+  while [ "$old" -lt "$new" ]; do
+    old="$((old+1))"
+    broadcall upgrade_$old
   done
 }
 

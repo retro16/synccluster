@@ -351,19 +351,19 @@ master_exec() {
 }
 
 master_buildnumber() {
-  echo "$SCBUILD"
+  echo "$SCVERSION"
 }
 
 master_update_sc() {
   if [ "$MASTER" ]; then
     require sshlink
-    local remotebuild="$(sshlink sc "$MASTER" master buildnumber || true)"
-    if [ "$remotebuild" = "Cannot find $SC master buildnumber" ]; then
+    local remoteversion="$(sshlink sc "$MASTER" master buildnumber || true)"
+    if [ "$remoteversion" = "Cannot find $SC master buildnumber" ]; then
       echo "$SC on $MASTER does not support update"
       return 0
     fi
-    if [ "$remotebuild" -gt "$SCBUILD" ]; then
-      if [ "$((remotebuild/1000))" -ne "$((SCBUILD/1000))" ]; then
+    if [ "$remoteversion" -gt "$SCVERSION" ]; then
+      if [ "$((remoteversion/1000))" -ne "$((SCVERSION/1000))" ]; then
         echo "Cannot update $SC from $MASTER: major version number differ"
         return 1
       fi
@@ -372,15 +372,11 @@ master_update_sc() {
 $SCBIN
 $SCLIBDIR
 EOF
-      local old="$SCBUILD"
-      SCBUILD="$remotebuild"
+      local old="$SCVERSION"
+      SCVERSION="$remoteversion"
 
       # Call module upgrade for all modules
-      reload_modules
-      while [ "$old" -lt "$SCBUILD" ]; do
-        old="$((old+1))"
-        broadcall upgrade_$old
-      done
+      upgrade_modules "$old"
     fi
   fi
 }
