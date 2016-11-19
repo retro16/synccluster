@@ -30,6 +30,7 @@ LICENSE
 update_setup() {
   require settings
   settings prompt SCUPDATEURL "https://github.com/retro16/synccluster/archive/master.tar.gz" "$SC update URL"
+  settings save
 }
 
 update_ready() {
