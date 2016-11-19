@@ -29,6 +29,10 @@ LICENSE
 
 update_setup() {
   require settings
+  if has master && ! contains "$(master mode)" master; then
+    require sshlink
+    sshlink getsettings SCUPDATEURL
+  fi
   settings prompt SCUPDATEURL "https://github.com/retro16/synccluster/archive/master.tar.gz" "$SC update URL"
   settings save
 }
