@@ -51,10 +51,13 @@ update_start() {
   syspackage tar tar
   syspackage gzip gzip
 
+  require update setup
+
   require temp
   temp dir
-  wget -qO- "$SCUPDATEURL | tar -C "$TEMP_FILE" -xz
-  "$TEMP_FILE"/"$SC" install
+  wget -qO- "$SCUPDATEURL" | tar -C "$TEMP_FILE" -xvz
+  "$TEMP_FILE"/*/"$SC" install
+  temp release
 
   exec "$SCBIN" update upgrade "$SCBUILD"
 }

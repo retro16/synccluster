@@ -315,7 +315,7 @@ if [ "$UID" -ne 0 ]; then
   exit 1
 fi
 
-if [ -r "$SCLIBDIR/common" ] && [ "$subcmd" != "install" ]; then
+if [ -d "$SCLIBDIR" ] && [ "$subcmd" != "install" ]; then
   SCINSTALLED=1
 else
   # Not installed
