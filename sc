@@ -167,7 +167,7 @@ reload_modules() {
 broadcall() {
   local function="$1"; shift
 
-  for f in "$SCLIDDIR"/*; do
+  for f in "$SCLIBDIR"/*; do
     local mod="$(basename "$f")"
     source "$f"
     # Add the main entry point

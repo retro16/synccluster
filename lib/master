@@ -357,7 +357,7 @@ master_update_sc() {
   if [ "$MASTER" ]; then
     require sshlink
     local remotebuild="$(sshlink sc "$MASTER" master buildnumber || true)"
-    if [ -z "$remotebuild" ]; then
+    if [ "$remotebuild" = "Cannot find $SC master buildnumber" ]; then
       echo "$SC on $MASTER does not support update"
       return 0
     fi
@@ -371,7 +371,15 @@ master_update_sc() {
 $SCBIN
 $SCLIBDIR
 EOF
+      local old="$SCBUILD"
+      SCBUILD="$remotebuild"
+
+      # Call module upgrade for all modules
       reload_modules
+      while [ "$old" -lt "$SCBUILD" ]; do
+        old="$((old+1))"
+        broadcall upgrade_$old
+      done
     fi
   fi
 }
