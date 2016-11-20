@@ -44,7 +44,7 @@ scanner_setup() {
     temp file tmp
     grep -vE "include.*$SC\\.conf" /etc/scanbd/scanbd.conf > "$tmp"
     echo "include(scanner.d/$SC.conf)" >> "$tmp"
-    mv "$tmp" /etc/scanbd.conf
+    mv "$tmp" /etc/scanbd/scanbd.conf
     temp forget tmp
 
     scanner__scanbd_conf "$(scanimage -L | sed -e "s;^device .\([a-zA-Z0-9]*\):.*;\1;")" > "/etc/scanbd/scanner.d/$SC.conf"
@@ -94,9 +94,13 @@ EOF
 }
 
 scanner__scan_trigger_script() {
-  echo '#!/bin/bash'
-  echo "source '$SCDEF'"
-  echo "source '$SCSETTINGS'"
+  cat <<EOF
+#!/bin/bash
+SCANDIR=/tmp
+SCANOPT="--mode=Gray --resolution 200 -x 215mm -y 297mm"
+if [ -e '$SCDEF' ]; then source '$SCDEF'; fi
+if [ -e '$SCSETTINGS' ]; then source '$SCSETTINGS'; fi
+EOF
   cat <<'EOF'
 
 cd "$SCANDIR"
