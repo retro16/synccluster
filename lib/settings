@@ -99,7 +99,7 @@ settings_prompt() {
 
   if [ -z "${!name}" ]; then
     local v="$( \
-      dialog --inputbox "$prompt" 0 74 "$default" 3>&1 1>&2 2>&3 3>&- \
+      dialog --inputbox -- "$prompt" 0 74 "$default" 3>&1 1>&2 2>&3 3>&- \
     )"
     clear
     declare -g "$name=$v"
@@ -117,7 +117,7 @@ settings_prompt_bool() {
     if ! [ "$default" ]; then
       default="--defaultno"
     fi
-    if dialog $default --yesno "$prompt" 0 0; then
+    if dialog $default --yesno -- "$prompt" 0 0; then
       declare -g "$name=0"
     else
       declare -g "$name=1"
@@ -136,7 +136,7 @@ settings_prompt_path() {
   settings_prompt "$name" "$default" "$prompt"
   if ! [ -d "${!name}" ]; then
     if ! [ -e "${!name}" ]; then
-      if dialog --yesno "Path ${!name} does not exist. Create it ?" 0 0; then
+      if dialog --yesno -- "Path ${!name} does not exist. Create it ?" 0 0; then
         mkdir -p "${!name}"
       else
         echo "Missing path"
@@ -158,7 +158,7 @@ settings_choice() {
 
   if [ -z "${!name}" ]; then
     local v="$( \
-      dialog --menu "$prompt" 0 0 0 "$@" 3>&1 1>&2 2>&3 3>&- \
+      dialog --menu -- "$prompt" 0 0 0 "$@" 3>&1 1>&2 2>&3 3>&- \
     )"
     clear
     declare -g "$name=$v"
