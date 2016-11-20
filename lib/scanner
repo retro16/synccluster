@@ -1,0 +1,134 @@
+#!/bin/bash
+###############################################################################
+<<LICENSE
+
+The MIT License (MIT)
+
+Copyright (c) 2016 Jean-Matthieu COULON
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+LICENSE
+###############################################################################
+
+scanner_setup() {
+  syspackage sane /etc/saned/saned.conf
+  require settings
+
+  if scanimage -L | grep -E "^device.*is a" &>/dev/null; then
+    settings set SCANMODE local
+    settings prompt SCANOPT "--mode=Gray --lampoff-time=60 --warmup-time=2 --resolution 200 --calibration-cache=yes -x 215mm -y 297mm" "scanimage options"
+    settings prompt_path SCANDIR "/srv/scan" "Path to scanner"
+
+    syspackage scanbd scanbd
+    syspackage imagemagick convert
+    syspackage tesseract-ocr tesseract
+
+    require temp
+    temp file tmp
+    grep -vE "include.*plustek" /etc/scanbd.conf > "$tmp"
+    echo "include(scanner.d/$SC.conf)" >> "$tmp"
+    mv "$tmp" /etc/scanbd.conf
+    temp forget tmp
+
+    scanner__scanbd_conf "$(scanimage -L | sed -e "s;^device .\([a-zA-Z0-9]*\):.*;\1;")" > "/etc/scanbd/scanner.d/$SC.conf"
+    scanner__scan_trigger_script > "$SCBINDIR/${SC}_scan_trigger"
+    chmod a+x "$SCBINDIR/${SC}_scan_trigger"
+
+    settings save
+
+    if ! grep -E "^192\.168\.0\.0/16" /etc/sane.d/saned.conf &>/dev/null; then
+      echo "192.168.0.0/16" >> /etc/sane.d/saned.conf
+    fi
+  elif has master && [ "$MASTER" ]; then
+    settings set SCANMODE remote
+    # Link to the master host
+    if ! grep -E "^$MASTER" /etc/sane.d/net.conf &>/dev/null; then
+      echo "$MASTER" >> /etc/sane.d/net.conf
+    fi
+    settings save
+  fi
+}
+
+scanner_ready() {
+  if [ "$SCANMODE" = local ] && which scanimage &>/dev/null && which scanbd &>/dev/null && [ -e "$SCBINDIR/${SC}_scan_trigger" ] && [ -e "/etc/scanbd/scanner.d/$SC.conf" ] && grep -E "^192\.168\.0\.0/16" /etc/sane.d/saned.conf &>/dev/null; then
+    return 0
+  fi
+  if [ "$SCANMODE" = remote ] && has master && [ "$MASTER" ] && grep -E "^$MASTER" /etc/sane.d/net.conf &>/dev/null; then
+    return 0
+  fi
+  return 1
+}
+
+scanner__scanbd_conf() {
+  local model="$1"; shift
+  local action="button"
+
+  cat <<EOF
+device $SC {
+  filter="^$model.*"
+  desc="$SC"
+  action $action {
+    filter=".*$action.*"
+    desc="Button"
+    script="$SCBINDIR/${SC}_scan_trigger"
+  }
+}
+EOF
+}
+
+scanner__scan_trigger_script() {
+  echo '#!/bin/bash'
+  echo "source '$SCDEF'"
+  echo "source '$SCSETTINGS'"
+  cat <<'EOF'
+
+cd "$SCANDIR"
+
+for i in {0000..9999}; do
+  file="scan$i.jpg"
+  [ -e "$file" ] || [ -e "$file.tiff" ] || break
+done
+
+scanimage --format=tiff $SCANOPT > "$file.tiff"
+(
+  trap "rm -f '$file.tiff' '$file.png'" EXIT
+  convert "$file.tiff" \( +clone -sample 5% -resize 25% -blur 2 -brightness-contrast -20x+15 -filter triangle -resize 8000% \) -brightness-contrast -30x+20 -compose Divide_Src -composite "$file.png"
+  convert "$file.png" -quality 75 "$file"
+  tesseract "$file.png" "$file"
+) & disown
+
+EOF
+}
+
+scanner_settings() {
+  echo SCANMODE
+  if [ "$SCANMODE" = local ]; then
+    echo SCANDIR
+    echo SCANOPT
+  fi
+}
+
+scanner_files() {
+  echo "/etc/scanbd/scanbd.conf"
+  echo "/etc/scanbd/scanner.d/$SC.conf"
+  if [ "$SCANMODE" = local ]; then
+    echo "$SCANDIR"
+  fi
+}

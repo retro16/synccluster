@@ -63,6 +63,7 @@ utils_client() {
     solaar \
     numlockx \
     soundconverter \
+    gparted \
   -y
 
   apt-get install -y --no-install-recommends virt-manager gir1.2-spice-client-gtk-3.0 firefox firefox-l10n-fr
@@ -75,6 +76,20 @@ utils_client() {
     apt-get update
     apt-get install -y owncloud-client
   fi
+}
+
+# Utilities useful for a server
+utils_server() {
+  apt-get install \
+    libvirt-daemon-system \
+    qemu-system-x86 \
+    qemu-kvm \
+    ovmf \
+    sgabios \
+    debootstrap \
+    iotop \
+    iftop \
+  -y
 }
 
 utils_ready() {

@@ -31,11 +31,12 @@ set -e
 
 # Defaults
 SC="sc"
-SCVERSION=1002 # Version number (major * 1000 + minor)
+SCVERSION=1003 # Version number (major * 1000 + minor)
 SCROOTDIR=""
 SCPREFIX="$SCROOTDIR/usr/local"
 SCLIBDIR="$SCPREFIX/lib/$SC"
-SCBIN="$SCPREFIX/sbin/$SC"
+SCBINDIR="$SCPREFIX/sbin"
+SCBIN="$SCBINDIR/$SC"
 SCDEF="$SCROOTDIR/etc/default/$SC"
 SCSETTINGS="$SCROOTDIR/etc/$SC"
 
@@ -281,6 +282,21 @@ contains() {
     fi
   done
   return 1
+}
+
+# Tell if a variable is a defined boolean (1 or 0)
+isbool() {
+  local varname="$1"; shift
+  if [ "${!varname}" = "1" ] || [ "${!varname}" = "0" ]; then
+    return 1
+  fi
+}
+
+# Returns true if a variable is a boolean with a true value.
+# Remember that shell uses inverted logic so 1 is false and 0 is true
+getbool() {
+  local varname="$1"; shift
+  return ${!varname}
 }
 
 # Install function

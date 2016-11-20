@@ -31,6 +31,7 @@ LICENSE
 mass_setup() {
   require settings
   settings prompt_path MASSDIR "/srv/mass" "Mass storage directory path"
+  settings prompt_bool MASSBACKUP "" "Backup mass directory ?"
 
   settings save
 }
@@ -42,14 +43,14 @@ mass_cleanup() {
 }
 
 mass_enabled() {
-  if [ "$MASSDIR" ] && [ -d "$MASSDIR" ]; then
+  if [ "$MASSDIR" ] && [ -d "$MASSDIR" ] && isbool MASSBACKUP; then
     return 0
   fi
   return 1
 }
 
 mass_ready() {
-  if mass enabled; then
+  if mass enabled && isbool MASSBACKUP; then
     return 0
   fi
   return 1
@@ -57,7 +58,7 @@ mass_ready() {
 
 mass_files() {
   if ! has master || [ "$(master mode)" = "master" ]; then
-    if mass enabled; then
+    if mass enabled && getbool MASSBACKUP; then
       echo "$MASSDIR"
     fi
   fi
@@ -71,4 +72,11 @@ mass_restore() {
 
 mass_settings() {
   echo MASSDIR
+  echo MASSBACKUP
+}
+
+mass_upgrade_1003() {
+  require settings
+  settings_set MASSBACKUP 1 # Don't backup mass directory by default
+  settings save
 }

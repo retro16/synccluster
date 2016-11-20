@@ -106,6 +106,26 @@ settings_prompt() {
   fi
 }
 
+settings_prompt_bool() {
+  local name="$1"; shift
+  local default="$1"; shift || default=""
+  local prompt="$1"; shift || prompt="Please enter the value of $name"
+
+  syspackage dialog dialog
+
+  if [ -z "${!name}" ]; then
+    if ! [ "$default" ]; then
+      default="--defaultno"
+    fi
+    if dialog $default --yesno "$prompt" 0 0; then
+      declare -g "$name=0"
+    else
+      declare -g "$name=1"
+    fi
+    clear
+  fi
+}
+
 settings_prompt_path() {
   local name="$1"; shift
   local default="$1"; shift || default=""

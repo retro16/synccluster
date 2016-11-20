@@ -93,6 +93,7 @@ master_setup() {
       require wstunnel setup
       require user setup
       master__allow_root_ssh
+      utils server
       ;;
     "standby")
       require ssl
@@ -113,6 +114,7 @@ master_setup() {
       crontask add master daily
       crontask add master fast
       master__allow_root_ssh
+      utils server
       ;;
     "backup")
       require backup setup
