@@ -42,7 +42,7 @@ scanner_setup() {
 
     require temp
     temp file tmp
-    grep -vE "include.*plustek" /etc/scanbd.conf > "$tmp"
+    grep -vE "include.*$SC\\.conf" /etc/scanbd/scanbd.conf > "$tmp"
     echo "include(scanner.d/$SC.conf)" >> "$tmp"
     mv "$tmp" /etc/scanbd.conf
     temp forget tmp
@@ -53,7 +53,7 @@ scanner_setup() {
 
     settings save
 
-    if ! grep -E "^192\.168\.0\.0/16" /etc/sane.d/saned.conf &>/dev/null; then
+    if ! grep -E "^192\\.168\\.0\\.0/16" /etc/sane.d/saned.conf &>/dev/null; then
       echo "192.168.0.0/16" >> /etc/sane.d/saned.conf
     fi
   elif has master && [ "$MASTER" ]; then
