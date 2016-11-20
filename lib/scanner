@@ -55,6 +55,7 @@ scanner_setup() {
 
     if ! grep -E "^192\\.168\\.0\\.0/16" /etc/sane.d/saned.conf &>/dev/null; then
       echo "192.168.0.0/16" >> /etc/sane.d/saned.conf
+      systemctl restart saned.socket
     fi
   elif has master && [ "$MASTER" ]; then
     settings set SCANMODE remote
