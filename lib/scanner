@@ -98,8 +98,8 @@ scanner__scan_trigger_script() {
 #!/bin/bash
 SCANDIR=/tmp
 SCANOPT="--mode=Gray --resolution 200 -x 215mm -y 297mm"
-if [ -e '$SCDEF' ]; then source '$SCDEF'; fi
-if [ -e '$SCSETTINGS' ]; then source '$SCSETTINGS'; fi
+if [ -e '$SCDEF' ]; then source '$SCDEF'; fi
+if [ -e '$SCSETTINGS' ]; then source '$SCSETTINGS'; fi
 EOF
   cat <<'EOF'
 
