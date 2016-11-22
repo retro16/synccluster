@@ -1,0 +1,116 @@
+#!/bin/bash
+###############################################################################
+<<LICENSE
+
+The MIT License (MIT)
+
+Copyright (c) 2016 Jean-Matthieu COULON
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+LICENSE
+###############################################################################
+
+portforward_add() {
+  local host="$1"; shift
+  local port="$1"; shift
+
+  require daemon setup
+  require sshlink setup
+  require settings
+
+  if portforward has "$host" "$port"; then return 0; fi
+
+  sshlink add "$host"
+
+  PORTFORWARD_LIST="$PORTFORWARD_LIST $host:$port"
+  settings save
+
+  daemon add portforward "$host"
+}
+
+portforward_del() {
+  local host="$1"; shift
+  local port="$1"; shift || port=""
+  
+  if ! portforward has "$host" "$port"; then return 0; fi
+  
+  require settings
+
+  if [ "$port" ]; then
+    PORTFORWARD_LIST="$(sed -e "s; $host:$port;;" <<< "$PORTFORWARD_LIST")"
+    if ! portforward has "$host"; then
+      daemon del portforward "$host"
+    fi
+  else
+    PORTFORWARD_LIST="$(sed -e "s; $host:[0-9]*;;" <<< "$PORTFORWARD_LIST")"
+    daemon del portforward "$host"
+  fi
+
+  settings save
+}
+
+portforward_has() {
+  local host="$1"; shift
+  local port="$1"; shift || port=""
+
+  if [ "$port" ]; then
+    [[ "$PORTFORWARD_LIST" = *" $host:$port "* ]]
+  else
+    local h
+    local pf
+    for pf in $PORTFORWARD_LIST; do
+      h="${pf%:*}"
+      if [ "$h" = "$host" ]; then
+        return 0
+      fi
+    done
+    return 1
+  fi
+}
+
+portforward_daemon() {
+  local host="$1"; shift
+
+  local ports=""
+  local h
+  local p
+  local pf
+  for pf in $PORTFORWARD_LIST; do
+    h="${pf%:*}"
+    p="${pf##*:}"
+    if [ "$h" = "$host" ]; then
+      ports="$ports -L $p:localhost:$p"
+    fi
+  done
+
+  if [ "$ports" ]; then
+    exec ssh -o ServerAliveInterval=10 -N $ports "$host"
+  else
+    exec cat # Stay idle, don't connect to SSH
+  fi
+}
+
+portforward_list() {
+  sed -e "s; ;\\n;g" <<< "$PORTFORWARD_LIST"
+}
+
+portforward_settings() {
+  echo PORTFORWARD_LIST
+}

@@ -30,6 +30,10 @@ LICENSE
 
 daemon_add() {
   local name="$1"; shift
+  if daemon has "$name" "$@"; then return 0; fi
+  if [ "$1" ]; then
+    name="${name}_$1"
+  fi
   cat > "/etc/systemd/system/${SC}_damon_$name.service" <<EOF
 [Unit]
 Description=Start $name module as a daemon
@@ -47,11 +51,15 @@ WantedBy=multi-user.target
 EOF
   systemctl daemon-reload
   systemctl enable "${SC}_daemon_$name.service"
-  systemctl start "${SC}_daemon_$name.service"
+  systemctl restart "${SC}_daemon_$name.service"
 }
 
 daemon_del() {
   local name="$1"; shift
+  if ! daemon has "$name" "$@"; then return 0; fi
+  if [ "$1" ]; then
+    name="${name}_$1"
+  fi
   systemctl stop "${SC}_daemon_$name.service"
   systemctl disable "${SC}_daemon_$name.service"
   rm -f "/etc/systemd/system/${SC}_daemon_$name.service"
@@ -60,6 +68,9 @@ daemon_del() {
 
 daemon_has() {
   local name="$1"; shift
+  if [ "$1" ]; then
+    name="${name}_$1"
+  fi
   if [ -e "/etc/systemd/system/${SC}_daemon_$name.service" ]; then
     return 0
   fi
