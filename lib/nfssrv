@@ -30,7 +30,7 @@ LICENSE
 
 nfssrv_setup() {
   syspackage nfs-kernel-server rpc.nfsd
-  mount | grep -e " type btrfs " -e " type fuse.sshfs " | sed -e 's/.* on \([^ ]*\) .*/\1 192.168.0.0\/16(rw,sync,no_subtree_check) 10.0.0.0\/8(rw,sync,no_subtree_check)/' > /etc/exports
+  mount | grep -e " type btrfs " -e " type fuse.sshfs " | sed -e 's/.* on \([^ ]*\) .*/\1 *(rw,sync,no_subtree_check)/' > /etc/exports
   sed -i -e '/^\/ /s/no_subtree_check/no_subtree_check,crossmnt,fsid=0/g' /etc/exports
   systemctl enable nfs-kernel-server
   systemctl restart nfs-kernel-server
@@ -50,12 +50,14 @@ nfssrv_enabled() {
 }
 
 nfssrv_ready() {
-  if nfssrv enabled && grep -E "/ 192.168.0.0/16.* 10.0.0.0/8" /etc/exports &>/dev/null; then
+  if nfssrv enabled && grep -Fx "/ *(rw,sync,no_subtree_check,crossmnt,fsid=0)" /etc/exports &>/dev/null; then
     return 0
   fi
   return 1
 }
 
 nfssrv_upgrade_1003() {
-  nfssrv setup
+  if nfssrv enabled; then
+    nfssrv setup
+  fi
 }
