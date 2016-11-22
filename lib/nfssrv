@@ -30,16 +30,14 @@ LICENSE
 
 nfssrv_setup() {
   syspackage nfs-kernel-server rpc.nfsd
-  mount | grep -e " type btrfs " -e " type fuse.sshfs " | sed -e 's/.* on \([^ ]*\) .*/\1 *(rw,sync,no_subtree_check)/' > /etc/exports
+  mount | grep -e " type btrfs " -e " type fuse.sshfs " -e " type nfs4 " | grep -v -e " on /mnt " -e " on /media " | sed -e 's/.* on \([^ ]*\) .*/\1 *(rw,sync,no_subtree_check)/' > /etc/exports
   sed -i -e '/^\/ /s/no_subtree_check/no_subtree_check,crossmnt,fsid=0/g' /etc/exports
-  systemctl enable nfs-kernel-server
-  systemctl restart nfs-kernel-server
+  systemctl reload nfs-kernel-server
 }
 
 nfssrv_cleanup() {
   > /etc/exports
-  systemctl stop nfs-kernel-server
-  systemctl disable nfs-kernel-server
+  systemctl reload nfs-kernel-server
 }
 
 nfssrv_enabled() {

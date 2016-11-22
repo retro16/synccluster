@@ -33,16 +33,30 @@ nfsclient_add() {
   local host="$1"; shift
   local remote="$1"; shift
   local path="$1"; shift || path="$remote"
+  local cache="$1"; shift || cache=""
 
   if nfsclient has "$path"; then return 0; fi
 
   syspackage nfs-common nfsstat
+  if [ "$cache" ]; then
+    syspackage cachefilesd cachefilesd
+
+    echo "Note: user_xattr mount option must be enabled on /var/cache/fscache."
+    echo "ext4 filesystem highly recommended for caching."
+
+    if ! [ -d /var/cache/fscache ]; then
+      echo "Error: cache directory /var/cache/fscache not found. Aborting"
+      exit 1
+    fi
+
+    cache=",proto=tcp,fsc"
+  fi
 
   require temp
   temp file
   grep -vE "[^ ]* $path[/ ]" /etc/fstab > "$TEMP_FILE"
   cat >> "$TEMP_FILE" <<EOF
-$host:$remote $path nfs4 rw,rsize=131072,wsize=131072,_netdev,hard,noauto,x-systemd.automount
+$host:$remote $path nfs4 rw,rsize=131072,wsize=131072,_netdev,hard,noauto,x-systemd.automount$cache 0 0
 EOF
   mv "$TEMP_FILE" /etc/fstab
   temp forget

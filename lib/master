@@ -109,8 +109,8 @@ master_setup() {
       require unisonsync setup
       require crontask
       require sshlink
-      require sshshare
-      sshshare add "$MASTER" "$MASSDIR"
+      require nfsclient
+      nfsclient add "$MASTER" "$MASSDIR" "$MASSDIR" cache
       crontask add master daily
       crontask add master fast
       master__allow_root_ssh
@@ -191,6 +191,11 @@ master_promote() {
         "master")
           require crontask
           crontask del master daily
+          require nfsclient
+          if [ "$MASSDIR" ] && nfsclient has "$MASTER" "$MASSDIR"; then
+            nfsclient del "$MASTER" "$MASSDIR"
+          fi
+          require mass setup
           ;;
         *)
           master__unsupported "$newmode"
@@ -204,6 +209,14 @@ master_promote() {
           require unisonsync setup
           require crontask
           crontask add master daily
+          require mass setup
+          if [ "$MASSDIR" ] && [ -d "$MASSDIR" ]; then
+            require nfsclient
+            if ls "$MASSDIR"/* &>/dev/null; then
+              echo "Warning: $MASSDIR not empty. Will be overridded by a remote share."
+            fi
+            nfsclient add "$MASTER" "$MASSDIR" "$MASSDIR" cache
+          fi
           ;;
         *)
           master__unsupported "$newmode"
@@ -395,4 +408,20 @@ master_status() {
 master_settings() {
   echo MASTER
   echo MASTER_MODE
+}
+
+master_upgrade_1003() {
+  if [ "$MASTER_MODE" = standby && "$MASSDIR" ]; then
+    if has sshshare && sshshare has "$MASTER" "$MASSDIR"; then
+      if has nfssrv && nfssrv ready; then
+        systemctl stop nfs-kernel-server
+      fi
+      sshshare del "$MASTER" "$MASSDIR"
+      require nfsclient
+      nfsclient add "$MASTER" "$MASSDIR" "$MASSDIR" cache
+      if has nfssrv && nfssrv ready; then
+        systemctl start nfs-kernel-server
+      fi
+    fi
+  fi
 }
