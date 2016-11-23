@@ -288,8 +288,9 @@ contains() {
 isbool() {
   local varname="$1"; shift
   if [ "${!varname}" = "1" ] || [ "${!varname}" = "0" ]; then
-    return 1
+    return 0
   fi
+  return 1
 }
 
 # Returns true if a variable is a boolean with a true value.
