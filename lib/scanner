@@ -131,9 +131,11 @@ scanner_settings() {
 }
 
 scanner_files() {
-  echo "/etc/scanbd/scanbd.conf"
-  echo "/etc/scanbd/scanner.d/$SC.conf"
-  if [ "$SCANMODE" = local ]; then
-    echo "$SCANDIR"
+  if scanner ready; then
+    echo "/etc/scanbd/scanbd.conf"
+    echo "/etc/scanbd/scanner.d/$SC.conf"
+    if [ "$SCANMODE" = local ]; then
+      echo "$SCANDIR"
+    fi
   fi
 }
