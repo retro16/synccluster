@@ -136,23 +136,45 @@ sshlink_getfiles() {
   temp release EXCLUDE_LIST
 }
 
-sshlink_getsettings() {
+# First parameter is the source host
+# Next parameters are module names
+# A regex filter may be appended to module name:
+#   module/regex
+sshlink_importsettings() {
   local host="$1"; shift
   require settings
 
   local m
   local slist
   local s
+  local sfilter
 
   for m in "$@"; do
     require "$m"
-    slist="$(sshlink sc "$host" "$m" settings)"
+    sfilter="${m#*/}"
+    if [ "$sfilter" = "$m" ]; then
+      slist="$(sshlink sc "$host" "$m" settings)"
+    else
+      slist="$(sshlink sc "$host" "$m" settings | grep -xE "$sfilter")"
+    fi
     for s in $slist; do
       settings set "$s" "$(sshlink sc "$host" settings get "$s")"
     done
   done
 
   settings save
+}
+
+sshlink_getsettings() {
+  local host="$1"; shift
+
+  local slist
+  local s
+
+  slist="$(sshlink sc "$host" broadcall settings)"
+  for s in $slist; do
+    echo "$s='$(sshlink sc "$host" settings get "$s")'"
+  done
 }
 
 sshlink_exclude_list() {

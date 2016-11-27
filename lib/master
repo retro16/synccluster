@@ -98,7 +98,7 @@ master_setup() {
     "standby")
       require ssl
       ssl sync "$MASTER" standby
-      sshlink getsettings "$MASTER" mass unisonsync mail roundcube owncloud update
+      sshlink importsettings "$MASTER" mass unisonsync mail roundcube owncloud update
       require mass setup
       require nfssrv setup
       require mail setup
@@ -120,13 +120,13 @@ master_setup() {
       require backup setup
       require user setup
       require crontask
-      sshlink getsettings "$MASTER" update
+      sshlink importsettings "$MASTER" update
       crontask add master daily
       ;;
     "client")
       require nfsclient
       nfsclient add "$MASTER" /home
-      sshlink getsettings "$MASTER" mass update
+      sshlink importsettings "$MASTER" mass update
       [ -d "$MASSDIR" ] || mkdir -p "$MASSDIR"
       nfsclient add "$MASTER" "$MASSDIR"
       require user setup
@@ -140,7 +140,7 @@ master_setup() {
     "roaming")
       require user setup
       require crontask
-      sshlink getsettings "$MASTER" mass settings
+      sshlink importsettings "$MASTER" mass settings
       require mass setup
       sshshare add "$MASTER" "$MASSDIR"
       crontask add master daily

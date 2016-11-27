@@ -79,7 +79,7 @@ ssl_sync() {
   if [ -z "$SSLCERT" ] || [ -z "$SSLKEY" ]; then
     # Initial setup
     require settings
-    sshlink getsettings "$host" ssl
+    sshlink importsettings "$host" ssl
     settings save
   fi
   ssl files | sshlink getfiles "$host"

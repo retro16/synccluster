@@ -116,9 +116,15 @@ backup_start() {
 
   if [ "$host" = "$entry" ]; then
     # Backup a SC compatible host
+
+    # Backup host settings
+    sshlink getsettings > "$BACKUP_DIR/$host/$SC"
+
+    # Backup host files
     sshlink sc "$host" broadcall files | sshlink getfiles "$host" "$BACKUP_DIR/$host/fs"
     local dblist="$(sshlink sc "$host" broadcall db)"
 
+    # Backup host databases if any
     if [ "$dblist" ]; then
       require db
       local db
@@ -140,7 +146,15 @@ backup_start() {
 
 backup_restore_from() {
   local source="$1"; shift
-  
+
+  if [ -e "$source/$SC" ]; then
+    syspackage dialog dialog
+    if dialog --yesno "Restore all SC settings ? This will overwrite $SCSETTINGS" 0 0; then
+      cp "$source/$SC" "$SCSETTINGS"
+      source "$SCSETTINGS"
+    fi
+  fi
+
   require user
   user restore "$source"
   broadcall restore "$source"
@@ -171,7 +185,7 @@ backup_sync() {
 
   if [ "$mode" = backup ]; then
     require sshlink
-    sshlink getsettings "$host" BACKUP_LIST
+    sshlink importsettings "$host" backup/BACKUP_LIST
   fi
 }
 
