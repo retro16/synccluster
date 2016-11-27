@@ -266,6 +266,9 @@ sshlink_delspeed() {
   if [ "$host" = "localhost" ]; then return 0; fi
 
   SSHLINK_SPEEDLIMITS="$(sed "s/ $host:[0-9]*//" <<< "$SSHLINK_SPEEDLIMITS")"
+
+  require settings
+  settings save
 }
 
 sshlink_settings() {
