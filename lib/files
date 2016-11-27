@@ -42,7 +42,7 @@ files_pull() {
   fi
 }
 
-# Restore files from a backup
+# Restore files from a local backup
 files_restoremodule() {
   local module="$1"; shift
   local source="$1"; shift
@@ -54,6 +54,6 @@ files_restoremodule() {
 
   syspackage rsync rsync
   if [ -d "$source/fs/" ]; then
-    "$module" files | rsync -az --delete --files-from=- -r "$source/fs/" "/" || true
+    "$module" files | rsync -a --delete --files-from=- -r "$source/fs/" "/" || true
   fi
 }
