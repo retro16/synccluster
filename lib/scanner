@@ -57,6 +57,9 @@ scanner_setup() {
       echo "192.168.0.0/16" >> /etc/sane.d/saned.conf
       systemctl restart saned.socket
     fi
+
+    require boot
+    boot add scanner
   elif has master && [ "$MASTER" ]; then
     settings set SCANMODE remote
     # Link to the master host
@@ -65,6 +68,10 @@ scanner_setup() {
     fi
     settings save
   fi
+}
+
+scanner_boot() {
+  exec scanbd -f
 }
 
 scanner_ready() {
@@ -137,5 +144,12 @@ scanner_files() {
     if [ "$SCANMODE" = local ]; then
       echo "$SCANDIR"
     fi
+  fi
+}
+
+scanner_upgrade_1004() {
+  if scanner ready && [ "$SCANMODE" = local ]; then
+    require boot
+    boot add scanner
   fi
 }
