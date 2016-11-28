@@ -118,7 +118,7 @@ backup_start() {
     # Backup a SC compatible host
 
     # Backup host settings
-    sshlink getsettings > "$BACKUP_DIR/$host/$SC"
+    sshlink getsettings "$host" > "$BACKUP_DIR/$host/$SC"
 
     # Backup host files
     sshlink sc "$host" broadcall files | sshlink getfiles "$host" "$BACKUP_DIR/$host/fs"
