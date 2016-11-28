@@ -58,8 +58,8 @@ scanner_setup() {
       systemctl restart saned.socket
     fi
 
-    require boot
-    boot add scanner
+    require daemon
+    daemon add scanner
   elif has master && [ "$MASTER" ]; then
     settings set SCANMODE remote
     # Link to the master host
@@ -70,7 +70,7 @@ scanner_setup() {
   fi
 }
 
-scanner_boot() {
+scanner_daemon() {
   exec scanbd -f
 }
 
@@ -149,7 +149,7 @@ scanner_files() {
 
 scanner_upgrade_1004() {
   if scanner ready && [ "$SCANMODE" = local ]; then
-    require boot
-    boot add scanner
+    require daemon
+    daemon add scanner
   fi
 }
