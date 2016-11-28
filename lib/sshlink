@@ -124,15 +124,19 @@ sshlink_getfiles() {
   local host="$1"; shift || host=localhost
   local target="$1"; shift || target="/"
   if [ "$host" = localhost ] && [ "$target" = "/" ]; then return 0; fi
+  local limit="$(sshlink getlimit "$host")"
   if [ "$host" = localhost ]; then
     host=""
   else
     host="$host:"
   fi
+  if [ "$limit" ]; then
+    limit="-z --bwlimit=$limit"
+  fi
   require temp
   temp file EXCLUDE_LIST
   sshlink_exclude_list > "$EXCLUDE_LIST"
-  rsync -az --delete --files-from=- -r --filter=". $EXCLUDE_LIST" "$host"/ "$target" || true
+  rsync -a $limit --delete --files-from=- -r --filter=". $EXCLUDE_LIST" "$host"/ "$target" || true
   temp release EXCLUDE_LIST
 }
 
@@ -219,13 +223,6 @@ sshlink_exclude_list() {
 EOF
 }
 
-sshlink_putfiles() {
-  local host="$1"; shift || host=localhost
-  local target="$1"; shift || target="/"
-  if [ "$host" = localhost ] && [ "$target" = "/" ]; then return 0; fi
-  rsync -az --delete --files-from=- -r / "$host":"$target"
-}
-
 sshlink_check_sc() {
   local host="$1"; shift || host=localhost
   if [ "$host" = "localhost" ]; then
@@ -235,4 +232,45 @@ sshlink_check_sc() {
     return 0
   fi
   return 1
+}
+
+sshlink_setspeed() {
+  local host="$1"; shift || host=localhost
+  local limit="$1"; shift || limit=""
+
+  if [ "$host" = "localhost" ]; then return 0; fi
+
+  if [ "$(sshlink getspeed "$host")" != "" ]; then
+    sshlink delspeed "$host"
+  fi
+
+  if [ "$limit" ]; then
+    SSHLINK_SPEEDLIMITS="$SSHLINK_SPEEDLIMITS $host:$limit"
+  fi
+
+  require settings
+  settings save
+}
+
+sshlink_getspeed() {
+  local host="$1"; shift || host=localhost
+
+  if [ "$host" = "localhost" ]; then return 0; fi
+
+  sed -n "s/.*$host:\([0-9]*\).*/\\1/p" <<< "$SSHLINK_SPEEDLIMITS"
+}
+
+sshlink_delspeed() {
+  local host="$1"; shift || host=localhost
+
+  if [ "$host" = "localhost" ]; then return 0; fi
+
+  SSHLINK_SPEEDLIMITS="$(sed "s/ $host:[0-9]*//" <<< "$SSHLINK_SPEEDLIMITS")"
+
+  require settings
+  settings save
+}
+
+sshlink_settings() {
+  echo SSHLINK_SPEEDLIMITS
 }
