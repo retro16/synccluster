@@ -124,7 +124,7 @@ sshlink_getfiles() {
   local host="$1"; shift || host=localhost
   local target="$1"; shift || target="/"
   if [ "$host" = localhost ] && [ "$target" = "/" ]; then return 0; fi
-  local limit="$(sshlink getlimit "$host")"
+  local limit="$(sshlink getspeed "$host")"
   if [ "$host" = localhost ]; then
     host=""
   else
