@@ -40,6 +40,9 @@ scanner_setup() {
     syspackage imagemagick convert
     syspackage tesseract-ocr tesseract
 
+    systemctl disable scanbd
+    systemctl stop scanbd
+
     require temp
     temp file tmp
     grep -vE "include.*$SC\\.conf" /etc/scanbd/scanbd.conf > "$tmp"
