@@ -71,7 +71,7 @@ scanner_setup() {
 }
 
 scanner_daemon() {
-  exec scanbd -f
+  exec scanbd -f -d1
 }
 
 scanner_ready() {
