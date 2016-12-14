@@ -110,7 +110,6 @@ master_setup() {
       require crontask
       require sshlink
       require nfsclient
-      nfsclient add "$MASTER" "$MASSDIR" "$MASSDIR" cache
       crontask add master daily
       crontask add master fast
       master__allow_root_ssh
@@ -126,9 +125,7 @@ master_setup() {
     "client")
       require nfsclient
       nfsclient add "$MASTER" /home
-      sshlink importsettings "$MASTER" mass update
-      [ -d "$MASSDIR" ] || mkdir -p "$MASSDIR"
-      nfsclient add "$MASTER" "$MASSDIR"
+      require mass setup
       require user setup
       require crontask
       crontask add master daily
@@ -140,9 +137,7 @@ master_setup() {
     "roaming")
       require user setup
       require crontask
-      sshlink importsettings "$MASTER" mass settings
       require mass setup
-      sshshare add "$MASTER" "$MASSDIR"
       crontask add master daily
       require unisonsync setup
       require boot
@@ -185,17 +180,16 @@ master_promote() {
     exit 2
   fi
 
-  case "$(master mode)" in
+  require settings
+  local oldmode="$(master mode)"
+  MASTER_MODE="$newmode"
+
+  case "$oldmode" in
     "standby")
       case "$newmode" in
         "master")
           require crontask
           crontask del master daily
-          require nfsclient
-          if [ "$MASSDIR" ] && nfsclient has "$MASTER" "$MASSDIR"; then
-            nfsclient del "$MASTER" "$MASSDIR"
-          fi
-          require mass setup
           ;;
         *)
           master__unsupported "$newmode"
@@ -209,14 +203,6 @@ master_promote() {
           require unisonsync setup
           require crontask
           crontask add master daily
-          require mass setup
-          if [ "$MASSDIR" ] && [ -d "$MASSDIR" ]; then
-            require nfsclient
-            if ls "$MASSDIR"/* &>/dev/null; then
-              echo "Warning: $MASSDIR not empty. Will be overridded by a remote share."
-            fi
-            nfsclient add "$MASTER" "$MASSDIR" "$MASSDIR" cache
-          fi
           ;;
         *)
           master__unsupported "$newmode"
@@ -227,8 +213,6 @@ master_promote() {
       case "$newmode" in
         "roaming")
           nfsclient del "$MASTER" /home
-          nfsclient del "$MASTER" "$MASSDIR"
-          sshshare add "$MASTER" "$MASSDIR"
           require user
           user cleanup_local
           master pull
@@ -241,9 +225,7 @@ master_promote() {
     "roaming")
       case "$newmode" in
         "client")
-          sshshare del "$MASTER" "$MASSDIR"
           nfsclient add "$MASTER" /home
-          nfsclient add "$MASTER" "$MASSDIR"
           require user
           user cleanup_local
           ;;
@@ -256,9 +238,11 @@ master_promote() {
       master__unsupported "$newmode"
       ;;
   esac
+  if has mass; then
+    mass cleanup_sync
+    mass setup
+  fi
 
-  require settings
-  MASTER_MODE="$newmode"
   settings save
 }
 
@@ -364,6 +348,16 @@ master_exec() {
     fi
   fi
   return $rv
+}
+
+master_getvar() {
+  local var="$1"; shift
+
+  if [ "$MASTER" ]; then
+    sshlink getvar "$MASTER" "$var"
+  else
+    echo "${!var}"
+  fi
 }
 
 master_buildnumber() {

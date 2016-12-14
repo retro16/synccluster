@@ -126,9 +126,11 @@ sshlink_getfiles() {
   if [ "$host" = localhost ] && [ "$target" = "/" ]; then return 0; fi
   local limit="$(sshlink getspeed "$host")"
   if [ "$host" = localhost ]; then
-    host=""
+    host="/"
+  elif [ "${host%:*}" != "$host" ]; then
+    host="$host/"
   else
-    host="$host:"
+    host="$host:/"
   fi
   if [ "$limit" ]; then
     limit="-z --bwlimit=$limit"
@@ -136,7 +138,7 @@ sshlink_getfiles() {
   require temp
   temp file EXCLUDE_LIST
   sshlink_exclude_list > "$EXCLUDE_LIST"
-  rsync -a $limit --delete --files-from=- -r --filter=". $EXCLUDE_LIST" "$host"/ "$target" || true
+  rsync -a $limit --delete --files-from=- -r --filter=". $EXCLUDE_LIST" "$host" "$target" || true
   temp release EXCLUDE_LIST
 }
 
@@ -167,6 +169,13 @@ sshlink_importsettings() {
   done
 
   settings save
+}
+
+sshlink_getvar() {
+  local host="$1"; shift
+  local var="$1"; shift
+
+  sshlink sc "$host" 'echo "$'"$var"'"'
 }
 
 sshlink_getsettings() {
