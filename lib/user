@@ -165,6 +165,15 @@ user_pull() {
 /etc/gshadow
 EOF
 
+  if ! [ -e "$TEMP_FILE/etc/passwd" ] \
+  || ! [ -e "$TEMP_FILE/etc/shadow" ] \
+  || ! [ -e "$TEMP_FILE/etc/group" ] \
+  || ! [ -e "$TEMP_FILE/etc/gshadow" ]; then
+    # Could not get files, abort
+    temp release
+    return 0
+  fi
+
   cp /etc/passwd "$TEMP_FILE"/passwd.new
   cp /etc/shadow "$TEMP_FILE"/shadow.new
   cp /etc/group "$TEMP_FILE"/group.new

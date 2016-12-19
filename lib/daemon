@@ -34,7 +34,7 @@ daemon_add() {
   if [ "$1" ]; then
     name="${name}_$1"
   fi
-  cat > "/etc/systemd/system/${SC}_damon_$name.service" <<EOF
+  cat > "/etc/systemd/system/${SC}_daemon_$name.service" <<EOF
 [Unit]
 Description=Start $name module as a daemon
 After=network-online.target

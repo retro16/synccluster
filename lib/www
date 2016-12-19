@@ -57,6 +57,7 @@ www_setup() {
 
 www_files() {
   echo /etc/php5/apache2/php.ini
+  echo "$WWWDIR/html"
 }
 
 www_restore() {
@@ -118,7 +119,7 @@ www_configure_apacheredirect() {
     #ServerName www.example.com
 
     ServerAdmin webmaster@localhost
-    DocumentRoot /var/www/html
+    DocumentRoot $WWWDIR/html
 
     # Available loglevels: trace8, ..., trace1, debug, info, notice, warn,
     # error, crit, alert, emerg.
@@ -145,6 +146,16 @@ www_configure_apacheredirect() {
 
 # vim: syntax=apache ts=4 sw=4 sts=4 sr noet
 EOF
+}
+
+www_sync() {
+  local host="$1"; shift
+  local mode="$1"; shift
+
+  if ! contains "$mode" standby; then return 0; fi
+
+  require sshlink
+  sshlink getfiles "$host:$(sshlink getvar WWWDIR)" "$WWWDIR" <<< "html"
 }
 
 www_enabled() {

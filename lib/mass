@@ -31,26 +31,83 @@ LICENSE
 mass_setup() {
   require settings
   settings prompt_path MASSDIR "/srv/mass" "Mass storage directory path"
-  settings prompt_bool MASSBACKUP "" "Backup mass directory ?"
+
+  if ! has master || [ "$(master mode)" = "master" ]; then
+    settings set MASSMODE separated
+    settings prompt_bool MASSBACKUP "" "Backup mass directory ?"
+  else
+    settings choice MASSMODE separated \
+      separated "Separated mass storage" \
+      unison "Unison synchronization" \
+      sshfs "SSHFS remote access" \
+      nfs4 "NFSv4 remote access with cachefilesd"
+    settings set MASSBACKUP 1 # Do not backup slave mass directory
+    mass setup_sync
+  fi
 
   settings save
 }
 
+mass_setup_sync() {
+  case "$MASSMODE" in
+    separated)
+      break
+      ;;
+    unison)
+      require unisonsync
+      unisonsync add "$(master host)" "$(master getvar MASSDIR)" "$MASSDIR" daily
+      ;;
+    sshfs)
+      require sshshare
+      sshshare add "$(master host)" "$(master getvar MASSDIR)" "$MASSDIR"
+      ;;
+    nfs4)
+      require nfsclient
+      nfsclient add "$(master host)" "$(master getvar MASSDIR)" "$MASSDIR" cache
+      ;;
+  esac
+}
+
 mass_cleanup() {
+  mass cleanup_sync
   require settings
   unset MASSDIR
   settings save
 }
 
+mass_cleanup_sync() {
+  case "$MASSMODE" in
+    separated)
+      break
+      ;;
+    unison)
+      require unisonsync
+      unisonsync del "$(master host)" "$(master getvar MASSDIR)" daily
+      ;;
+    sshfs)
+      require sshshare
+      sshshare del "$(master host)" "$(master getvar MASSDIR)" "$MASSDIR"
+      ;;
+    nfs4)
+      require nfsclient
+      nfsclient del "$MASSDIR"
+      ;;
+  esac
+  require settings
+  unset MASSMODE
+  unset MASSBACKUP
+  settings save
+}
+
 mass_enabled() {
-  if [ "$MASSDIR" ] && [ -d "$MASSDIR" ] && isbool MASSBACKUP; then
+  if [ "$MASSDIR" ] && [ -d "$MASSDIR" ] && isbool MASSBACKUP && [ "$MASSMODE" ]; then
     return 0
   fi
   return 1
 }
 
 mass_ready() {
-  if mass enabled && isbool MASSBACKUP; then
+  if mass enabled; then
     return 0
   fi
   return 1
@@ -73,10 +130,25 @@ mass_restore() {
 mass_settings() {
   echo MASSDIR
   echo MASSBACKUP
+  echo MASSMODE
 }
 
 mass_upgrade_1003() {
   require settings
-  settings_set MASSBACKUP 1 # Don't backup mass directory by default
+  settings set MASSBACKUP 1
+  settings save
+}
+
+mass_upgrade_1005() {
+  require settings
+  if has master && [ "$(master mode)" != "master" ]; then
+    if [ "$(master mode)" = "roaming" ]; then
+      settings set MASSMODE sshfs
+    else
+      settings set MASSMODE nfs4
+    fi
+  else
+    settings set MASSMODE separated
+  fi
   settings save
 }

@@ -58,10 +58,10 @@ nfsclient_add() {
   cat >> "$TEMP_FILE" <<EOF
 $host:$remote $path nfs4 rw,rsize=131072,wsize=131072,_netdev,hard,noauto,x-systemd.automount$cache 0 0
 EOF
+  umount -R "$path" || true
   mv "$TEMP_FILE" /etc/fstab
   temp forget
 
-  umount -R "$path" || true
   mount "$path"
 }
 

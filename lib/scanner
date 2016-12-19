@@ -40,6 +40,9 @@ scanner_setup() {
     syspackage imagemagick convert
     syspackage tesseract-ocr tesseract
 
+    systemctl disable scanbd
+    systemctl stop scanbd
+
     require temp
     temp file tmp
     grep -vE "include.*$SC\\.conf" /etc/scanbd/scanbd.conf > "$tmp"
@@ -57,6 +60,9 @@ scanner_setup() {
       echo "192.168.0.0/16" >> /etc/sane.d/saned.conf
       systemctl restart saned.socket
     fi
+
+    require daemon
+    daemon add scanner
   elif has master && [ "$MASTER" ]; then
     settings set SCANMODE remote
     # Link to the master host
@@ -65,6 +71,10 @@ scanner_setup() {
     fi
     settings save
   fi
+}
+
+scanner_daemon() {
+  exec scanbd -f -d1
 }
 
 scanner_ready() {
@@ -137,5 +147,12 @@ scanner_files() {
     if [ "$SCANMODE" = local ]; then
       echo "$SCANDIR"
     fi
+  fi
+}
+
+scanner_upgrade_1004() {
+  if scanner ready && [ "$SCANMODE" = local ]; then
+    require daemon
+    daemon add scanner
   fi
 }

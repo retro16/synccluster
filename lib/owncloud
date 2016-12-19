@@ -37,6 +37,7 @@ owncloud_setup() {
 
   settings prompt OWNCLOUD_PASSWORD "" "Owncloud admin and database password"
   settings prompt_path CLOUDDIR "/srv/cloud" "Owncloud storage path"
+  syspackage smbclient smbclient
 
   chown -R www-data:www-data "$CLOUDDIR"
 
@@ -196,4 +197,10 @@ owncloud_ready() {
 owncloud_settings() {
   echo OWNCLOUD_PASSWORD
   echo CLOUDDIR
+}
+
+owncloud_upgrade_1005() {
+  if owncloud ready; then
+    syspackage smbclient smbclient
+  fi
 }
