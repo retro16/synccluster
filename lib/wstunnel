@@ -35,20 +35,61 @@ wstunnel_setup() {
   npm install -g wstunnel
   require daemon
   daemon add wstunnel
+
+  require settings
+  settings set WSTUNNEL_MODE server
+  settings save
+}
+
+wstunnel_client() {
+  if ! has master || ! contains "$(master mode)" client roaming; then
+    echo "Error: No master to connect to."
+    exit 2
+  fi
+
+  syspackage nodejs-legacy node
+  syspackage npm npm
+  npm install -g wstunnel
+  require daemon
+  daemon add wstunnel
+
+  require settings
+  settings set WSTUNNEL_MODE client
+  settings save
 }
 
 wstunnel_cleanup() {
   require daemon
+  require settings
+
   daemon del wstunnel
+  settings del WSTUNNEL_MODE
+  settings save
 }
 
 wstunnel_ready() {
-  if has daemon && daemon has wstunnel; then
+  if has daemon && daemon has wstunnel && [ "$WSTUNNEL_MODE" ]; then
     return 0
   fi
   return 1
 }
 
 wstunnel_daemon() {
-  exec /usr/local/bin/wstunnel -s 8022 -t 127.0.0.1:22
+  if [ "$WSTUNNEL_MODE" = "client" ]; then
+    exec -t 8022 https://"$MASTER"/wstunnel
+  else
+    exec /usr/local/bin/wstunnel -s 8022 -t 127.0.0.1:22
+  fi
+}
+
+wstunnel_settings() {
+  echo WSTUNNEL_MODE
+}
+
+wstunnel_upgrade_1005() {
+  if wstunnel ready; then
+    require settings
+    settings set WSTUNNEL_MODE server
+    settings save
+  fi
 }

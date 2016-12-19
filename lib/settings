@@ -48,7 +48,9 @@ settings_list() {
 # Print all settings with their values
 settings_print() {
   for s in $(settings list); do
-    echo "$s='${!s}'"
+    if [ "${!s+x}" ]; then
+      echo "$s='${!s}'"
+    fi
   done
 }
 
@@ -57,8 +59,8 @@ settings_save() {
   local foreign_settings;
   if [ "$SCSETTINGS" ]; then
     if [ -r "$SCSETTINGS" ]; then
-      local foreign_settings_list="$(settings list | sed -e 's/$/=/' -e 's/^/\^/')"
-      foreign_settings="$(grep -E -v -f- "$SCSETTINGS" <<< "$foreign_settings_list" || true)"
+      local local_settings_list="$(settings list | sed -e 's/$/=/' -e 's/^/\^/')"
+      foreign_settings="$(grep -E -v -f- "$SCSETTINGS" <<< "$local_settings_list" || true)"
     fi
     settings print > "$SCSETTINGS".new
     echo "$foreign_settings" >> "$SCSETTINGS".new
