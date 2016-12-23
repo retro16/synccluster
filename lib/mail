@@ -35,6 +35,7 @@ mail_setup() {
   syspackage postfix postfix
   syspackage dovecot-imapd doveadm
   syspackage procmail procmail
+  syspackage spamassassin spamassassin
 
   settings prompt_path MAILDIR "/var/mail" "Enter mail directory:"
 
@@ -59,6 +60,7 @@ mail_ready() {
   if which postfix &>/dev/null \
   && which doveadm &>/dev/null \
   && which procmail &>/dev/null \
+  && which spamassassin &>/dev/null \
   && [ -e /etc/procmailrc ] \
   && [ -d "$MAILDIR" ] \
   ; then
@@ -112,6 +114,14 @@ mail_procmail_conf() {
   cat <<EOF
 UMASK=007
 DEFAULT=\${EPREFIX}$MAILDIR/\$LOGNAME/Maildir/
+
+:0fw
+* < 1048576
+| /usr/bin/spamassassin
+
+:0:
+* ^X-Spam-Status: Yes
+${EPREFIX}/var/mail/$LOGNAME/Maildir/Spam/
 EOF
 }
 
@@ -188,4 +198,10 @@ mail_restore() {
 
 mail_settings() {
   echo MAILDIR
+}
+
+mail_upgrade_1005() {
+  if mail ready; then
+    mail procmail_conf > "/etc/procmailrc"
+  fi
 }
