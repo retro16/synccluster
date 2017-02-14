@@ -58,12 +58,13 @@ scanner_setup() {
 
     if ! grep -E "^192\\.168\\.0\\.0/16" /etc/sane.d/saned.conf &>/dev/null; then
       echo "192.168.0.0/16" >> /etc/sane.d/saned.conf
-      systemctl restart saned.socket
+      systemctl enable saned.socket
+      systemctl start saned.socket
     fi
 
     require daemon
     daemon add scanner
-  elif has master && [ "$MASTER" ]; then
+  elif has master && [ "$MASTER" ] && [ "$(master mode)" != "standby" ]; then
     settings set SCANMODE remote
     # Link to the master host
     if ! grep -E "^$MASTER" /etc/sane.d/net.conf &>/dev/null; then
