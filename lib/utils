@@ -64,6 +64,7 @@ utils_client() {
     numlockx \
     soundconverter \
     gparted \
+    kdenlive \
   -y
 
   apt-get install -y --no-install-recommends virt-manager gir1.2-spice-client-gtk-3.0 firefox firefox-l10n-fr

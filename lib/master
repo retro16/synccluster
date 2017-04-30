@@ -169,6 +169,7 @@ master__unsupported() {
 
 master_promote() {
   local newmode="$1"; shift || newmode="master"
+  local newmaster="$1"; shift
 
   if ! master ready; then
     echo "Master package not configured"
@@ -190,6 +191,7 @@ master_promote() {
         "master")
           require crontask
           crontask del master daily
+          settings del MASTER
           ;;
         *)
           master__unsupported "$newmode"
@@ -199,6 +201,7 @@ master_promote() {
     "master")
       case "$newmode" in
         "standby")
+          MASTER="$newmaster"
           master__link
           require unisonsync setup
           require crontask
@@ -244,6 +247,55 @@ master_promote() {
   fi
 
   settings save
+}
+
+master_switch() {
+  local newmaster="$1"; shift || { echo "New master name required."; exit 1 }
+
+  if ! master ready; then
+    echo "Master package not configured"
+    exit 2
+  fi
+
+  case "$(master mode)" in
+    "standby")
+      master promote master
+      master promote standby "$newmaster"
+      ;;
+    "client")
+      require nfsclient
+      require mass
+
+      # Undo setup for all modules (store settings in local variables)
+      nfsclient del "$MASTER" /home
+      local masssettings="$(settings print mass)"
+      mass cleanup
+
+      # Switch master host name
+      MASTER="$newmaster"
+      master__link
+
+      # Redo setup for all modules (restore settings from local variables)
+      nfsclient add "$MASTER" /home
+      eval "$masssettings"
+      require mass setup
+      ;;
+    "roaming")
+      require mass
+
+      # Undo setup for all modules (store settings in local variables)
+      local masssettings="$(settings print mass)"
+      mass cleanup
+
+      # Switch master host name
+      MASTER="$newmaster"
+      master__link
+
+      # Redo setup for all modules (restore settings from local variables)
+      eval "$masssettings"
+      require mass setup
+      ;;
+  esac
 }
 
 master_pull() {

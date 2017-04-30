@@ -47,11 +47,22 @@ settings_list() {
 
 # Print all settings with their values
 settings_print() {
-  for s in $(settings list); do
-    if [ "${!s+x}" ]; then
-      echo "$s='${!s}'"
-    fi
-  done
+  local mod="$1"; shift
+
+  if [ "$mod" ]; then
+    require "$mod"
+    for s in $($mod settings); do
+      if [ "${!s+x}" ]; then
+        echo "$s='${!s}'"
+      fi
+    done
+  else
+    for s in $(settings list); do
+      if [ "${!s+x}" ]; then
+        echo "$s='${!s}'"
+      fi
+    done
+  fi
 }
 
 # Save settings
