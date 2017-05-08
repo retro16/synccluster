@@ -47,15 +47,17 @@ settings_list() {
 
 # Print all settings with their values
 settings_print() {
-  local mod="$1"; shift
+  local mod="$1"; shift || true
 
   if [ "$mod" ]; then
     require "$mod"
-    for s in $($mod settings); do
-      if [ "${!s+x}" ]; then
-        echo "$s='${!s}'"
-      fi
-    done
+    if [ "$(type -t "${m}_settings")" = "function" ]; then
+      for s in $("${m}_settings"); do
+        if [ "${!s+x}" ]; then
+          echo "$s='${!s}'"
+        fi
+      done
+    fi
   else
     for s in $(settings list); do
       if [ "${!s+x}" ]; then
@@ -127,7 +129,9 @@ settings_prompt_bool() {
   syspackage dialog dialog
 
   if [ -z "${!name}" ]; then
-    if ! [ "$default" ]; then
+    if [ "$default" ]; then
+      default=""
+    else
       default="--defaultno"
     fi
     if dialog $default --yesno -- "$prompt" 0 0; then

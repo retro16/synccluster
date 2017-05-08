@@ -67,9 +67,9 @@ utils_client() {
     kdenlive \
   -y
 
-  apt-get install -y --no-install-recommends virt-manager gir1.2-spice-client-gtk-3.0 firefox firefox-l10n-fr
+  apt-get install -y --no-install-recommends virt-manager gir1.2-spice-client-gtk-3.0 firefox-esr firefox-esr-l10n-fr
 
-  apt-get -y --purge remove iceweasel firefox-esr || true
+  apt-get -y --purge remove iceweasel firefox || true
 
   if ! [ -e "/etc/apt/sources.list.d/${SC}_owncloud_client.list" ]; then
     echo 'deb http://download.opensuse.org/repositories/isv:/ownCloud:/desktop/Debian_8.0/ /' > "/etc/apt/sources.list.d/${SC}_owncloud_client.list"
