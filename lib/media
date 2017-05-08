@@ -48,7 +48,7 @@ media_setup() {
   adduser --home "$KODIDIR" --disabled-password --gecos "Kodi user for ${SC},,," kodi
 
   # Build lightdm configuration
-  sed -i -e 's/^#user-session=.*/user-session=customkodi/' /etc/lightdm/lightdm.conf
+  sed -i -e 's/^#user-session=.*/user-session=lightdm-xsession/' /etc/lightdm/lightdm.conf
   sed -i -e 's/^#autologin-user=.*/autologin-user=kodi/' /etc/lightdm/lightdm.conf
   sed -i -e 's/^#autologin-user-timeout=.*/autologin-user-timeout=15/' /etc/lightdm/lightdm.conf
 
@@ -56,8 +56,8 @@ media_setup() {
   media__customkodi_desktop > /usr/share/xsessions/customkodi.desktop
   media__xbindkeysrc > "$KODIDIR"/.xbindkeysrc
   chown kodi:kodi "$KODIDIR"/.xbindkeysrc
-  media__xinitrc > "$KODIDIR"/.xinitrc
-  chown kodi:kodi "$KODIDIR"/.xinitrc
+  media__xsession > "$KODIDIR"/.xsession
+  chown kodi:kodi "$KODIDIR"/.xsession
 
   if getbool RETROARCH; then
     media_setup_retroarch
@@ -155,7 +155,7 @@ NoDisplay=true
 EOF
 }
 
-media__xinitrc() {
+media__xsession() {
   cat <<EOF
 xbindkeys
 kodi-standalone
