@@ -189,6 +189,10 @@ mail_restore() {
   local source="$1"; shift
   require files
 
+  if ! [ "$MAILDIR" ]; then
+    return 0
+  fi
+
   files restoremodule mail "$source"
 
   newaliases

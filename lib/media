@@ -1,0 +1,129 @@
+#!/bin/bash
+###############################################################################
+<<LICENSE
+
+The MIT License (MIT)
+
+Copyright (c) 2016 Jean-Matthieu COULON
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+LICENSE
+###############################################################################
+
+
+media_setup() {
+  require settings
+  require utils setup
+  require mass setup
+
+  settings prompt_path KODIDIR "/var/lib/kodi" "Kodi home directory"
+  settings save
+
+  utils client
+
+  syspackage kodi kodi
+  useradd -c "Kodi media center directory,,," -d "$KODIDIR" kodi
+
+  # Build configuration
+  require temp
+  temp file tmp
+
+  grep -v ' ## sc-media' /etc/lightdm/lightdm.conf > "$tmp"
+  media__lightdm_seat_conf | sed -e 's/$/ ## sc-media/' >> "$tmp"
+  cp "$tmp" /etc/lightdm/lightdm.conf
+
+  temp release tmp
+
+  systemctl restart lightdm
+}
+
+media_cleanup() {
+  if ! media ready; then
+    return 1
+  fi
+  userdel -r kodi
+  apt-get remove kodi
+
+  require temp
+  temp file tmp
+  grep -v ' ## sc-media' /etc/lightdm/lightdm.conf > "$tmp"
+  cp "$tmp" /etc/lightdm/lightdm.conf
+  temp release tmp
+
+  systemctl restart lightdm
+
+  require settings
+  settings del KODIDIR
+}
+
+media_ready() {
+  if which kodi &>/dev/null \
+  && [ -d "$KODIDIR" ] \
+  && which lightdm &>/dev/null \
+  && grep -E '^autologin-user=kodi' /etc/lightdm/lightdm.conf &>/dev/null \
+  ; then
+    return 0
+  fi
+  return 1
+}
+
+media_files() {
+  echo "/etc/lightdm/lightdm.conf"
+  echo "$KODIDIR"
+}
+
+media_settings() {
+  echo KODIDIR
+}
+
+media__lightdm_seat_conf() {
+  cat <<EOF
+[Seat:0]
+user-session=xfce
+autologin-user=kodi
+EOF
+}
+
+media__kodi_startup() {
+  cat <<EOF
+[Desktop Entry]
+Encoding=UTF-8
+Name=kodi
+GenericName=kodi
+Exec=kodi
+Terminal=false
+Type=Application
+Categories=
+EOF
+}
+
+media_restore() {
+  local source="$1"; shift
+  require files
+
+  if ! [ "$KODIDIR" ]; then
+    return 0
+  fi
+
+  files restoremodule media "$source"
+  useradd -c "Kodi media center directory,,," -d "$KODIDIR" kodi
+
+  systemctl restart lightdm
+}
