@@ -250,7 +250,7 @@ master_promote() {
 }
 
 master_switch() {
-  local newmaster="$1"; shift || { echo "New master name required."; exit 1 }
+  local newmaster="$1"; shift || { echo "New master name required."; exit 1; }
 
   if ! master ready; then
     echo "Master package not configured"
