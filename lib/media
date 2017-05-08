@@ -48,8 +48,7 @@ media_setup() {
   adduser --home "$KODIDIR" --disabled-password --gecos "Kodi user for ${SC},,," kodi
 
   # Build lightdm configuration
-  sed -i -e 's/^#user-session=.*/user-session=kodi/' /etc/lightdm/lightdm.conf
-  sed -i -e 's:^#session-setup-script=.*:session-setup-script=xbindkeys --file /etc/kodi-xbindkeysrc:' /etc/lightdm/lightdm.conf
+  sed -i -e 's/^#user-session=.*/user-session=customkodi/' /etc/lightdm/lightdm.conf
   sed -i -e 's/^#autologin-user=.*/autologin-user=kodi/' /etc/lightdm/lightdm.conf
   sed -i -e 's/^#autologin-user-timeout=.*/autologin-user-timeout=15/' /etc/lightdm/lightdm.conf
 
@@ -165,7 +164,6 @@ EOF
 
 media_files() {
   echo "/etc/lightdm/lightdm.conf"
-  echo "/etc/kodi-xbindkeysrc"
   echo "$KODIDIR"
 }
 
