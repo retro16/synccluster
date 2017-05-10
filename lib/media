@@ -51,10 +51,9 @@ media_setup() {
   # Build lightdm configuration
   sed -i -e 's/^#user-session=.*/user-session=lightdm-xsession/' /etc/lightdm/lightdm.conf
   sed -i -e 's/^#autologin-user=.*/autologin-user=kodi/' /etc/lightdm/lightdm.conf
-  sed -i -e 's/^#autologin-user-timeout=.*/autologin-user-timeout=15/' /etc/lightdm/lightdm.conf
+  sed -i -e 's/^#autologin-user-timeout=.*/autologin-user-timeout=0/' /etc/lightdm/lightdm.conf
 
   # Build startup files
-  media__customkodi_desktop > /usr/share/xsessions/customkodi.desktop
   media__xsession > "$KODIDIR"/.xsession
   chown kodi:kodi "$KODIDIR"/.xsession
 
@@ -78,11 +77,10 @@ media_cleanup() {
   sed -i -e 's/^autologin-user-timeout=.*/#autologin-user-timeout=/' /etc/lightdm/lightdm.conf || true
   systemctl restart lightdm
   
+  # kill all processes owned by the kodi user
   sleep 5
   local processes="$(ps aux | grep ^kodi | awk '{print $2}')"
   [ -z "$processes" ] || kill -9 $processes || true
-
-  rm -f /usr/share/xsessions/customkodi.desktop
 
   deluser --remove-home kodi || true
   if [ -d "$KODIDIR" ]; then rm -r "$KODIDIR"; fi
@@ -131,19 +129,10 @@ media_ready() {
   return 1
 }
 
-media__customkodi_desktop() {
-  cat <<EOF
-[Desktop Entry]
-Name=customkodi
-Exec=/etc/X11/Xsession
-NoDisplay=true
-EOF
-}
-
 media__xsession() {
   cat <<EOF
 awesome &
-sleep 0.1
+sleep 0.3
 kodi
 EOF
 }
