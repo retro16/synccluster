@@ -31,22 +31,22 @@ LICENSE
 media_setup() {
   require settings
   settings prompt_path KODIDIR "/var/lib/kodi" "Kodi home directory"
+  rm -r "$KODIDIR" # The directory must not exist so home directory creation works.
   settings prompt_bool RETROARCH "true" "Install RetroArch ?"
   settings save
 
   require mass setup
 
-  rm -r "$KODIDIR"
+  # Add the kodi user
+  adduser --home "$KODIDIR" --disabled-password --gecos "Kodi user for ${SC},,," kodi
 
-  utils client
-
+  # Install required debian packages
   syspackage lightdm lightdm
   syspackage kodi kodi
   syspackage speedcrunch speedcrunch
   syspackage awesome awesome
   syspackage firefox-esr
   syspackage numlockx numlockx
-  adduser --home "$KODIDIR" --disabled-password --gecos "Kodi user for ${SC},,," kodi
 
   # Build lightdm configuration
   sed -i -e 's/^#user-session=.*/user-session=lightdm-xsession/' /etc/lightdm/lightdm.conf
