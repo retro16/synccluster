@@ -42,9 +42,8 @@ media_setup() {
 
   syspackage lightdm lightdm
   syspackage kodi kodi
-  syspackage xbindkeys xbindkeys
-  syspackage xbindkeys-config xbindkeys-config
   syspackage speedcrunch speedcrunch
+  syspackage awesome awesome
   adduser --home "$KODIDIR" --disabled-password --gecos "Kodi user for ${SC},,," kodi
 
   # Build lightdm configuration
@@ -52,13 +51,18 @@ media_setup() {
   sed -i -e 's/^#autologin-user=.*/autologin-user=kodi/' /etc/lightdm/lightdm.conf
   sed -i -e 's/^#autologin-user-timeout=.*/autologin-user-timeout=15/' /etc/lightdm/lightdm.conf
 
-  # Build xbindkeys configuration
+  # Build startup files
   media__customkodi_desktop > /usr/share/xsessions/customkodi.desktop
-  media__xbindkeysrc > "$KODIDIR"/.xbindkeysrc
-  chown kodi:kodi "$KODIDIR"/.xbindkeysrc
   media__xsession > "$KODIDIR"/.xsession
   chown kodi:kodi "$KODIDIR"/.xsession
 
+  # Build awesome configuration
+  mkdir -p "$KODIDIR/.config/awesome" || true
+  media__awesome_rc_lua > "$KODIDIR/.config/awesome/rc.lua"
+  media__awesome_theme_lua > "$KODIDIR/.config/awesome/theme.lua"
+  chown -R kodi:kodi "$KODIDIR/.config"
+
+  # Install retroarch
   if getbool RETROARCH; then
     media_setup_retroarch
   fi
@@ -78,7 +82,7 @@ media_cleanup() {
 
   rm -f /usr/share/xsessions/customkodi.desktop
 
-  deluser --remove-home kodi
+  deluser --remove-home kodi || true
   if [ -d "$KODIDIR" ]; then rm -r "$KODIDIR"; fi
 
   require settings
@@ -125,27 +129,6 @@ media_ready() {
   return 1
 }
 
-media__xbindkeysrc() {
-  cat <<EOF
-"xterm"
-  control+Mod4+XF86Explorer
-"firefox -width 1920 -height 1080"
-  XF86HomePage
-"firefox -width 1920 -height 1080 http://duckduckgo.com"
-  XF86Search
-"xbindkeys-config"
-  control+Mod4+k
-"speedcrunch"
-  XF86Calculator
-EOF
-  if getbool RETROARCH; then
-  cat <<EOF
-"$KODIDIR/retroarch/bin/retroarch -f"
-  XF86Tools
-EOF
-  fi
-}
-
 media__customkodi_desktop() {
   cat <<EOF
 [Desktop Entry]
@@ -157,8 +140,151 @@ EOF
 
 media__xsession() {
   cat <<EOF
-xbindkeys
-kodi-standalone
+awesome &
+sleep 0.1
+kodi
+EOF
+}
+
+media__awesome_rc_lua() {
+  cat <<EOF
+require("awful")
+require("awful.autofocus")
+require("awful.rules")
+require("beautiful")
+require("naughty")
+if awesome.startup_errors then
+    naughty.notify({ preset = naughty.config.presets.critical,
+                     title = "Oops, there were errors during startup!",
+                     text = awesome.startup_errors })
+end
+do
+    local in_error = false
+    awesome.add_signal("debug::error", function (err)
+        if in_error then return end
+        in_error = true
+
+        naughty.notify({ preset = naughty.config.presets.critical,
+                         title = "Oops, an error happened!",
+                         text = err })
+        in_error = false
+    end)
+end
+
+beautiful.init("$KODIDIR/.config/awesome/theme.lua")
+
+terminal = "xterm"
+editor = os.getenv("EDITOR") or "vim"
+editor_cmd = terminal .. " -e " .. editor
+modkey = "Mod4"
+
+layouts =
+{
+    awful.layout.suit.max.fullscreen
+}
+
+tags = {}
+tags[1] = awful.tag({ 1 }, s, layouts[1])
+
+myawesomemenu = {
+EOF
+  if getbool RETROARCH; then
+    cat <<EOF
+   { "Retroarch", "$KODIDIR/retroarch/bin/retroarch -f" },
+EOF
+  fi
+  cat <<EOF
+   { "Firefox", "firefox" },
+   { "Terminal", "xterm" }
+}
+mymainmenu = awful.menu({ items = myawesomemenu })
+
+globalkeys = awful.util.table.join(
+    awful.key({ modkey,           }, "Tab",
+        function ()
+            awful.client.focus.byidx( 1)
+            if client.focus then client.focus:raise() end
+        end),
+
+    awful.key({ modkey,           }, "m", function () mymainmenu:show({keygrabber=true}) end),
+
+    -- Standard program
+    awful.key({ modkey,           }, "Return", function () awful.util.spawn(terminal) end),
+    awful.key({ ""    ,           }, "XF86Explorer", function () awful.util.spawn(terminal) end),
+    awful.key({ ""    ,           }, "XF86Tools", function () awful.util.spawn('/var/lib/kodi/retroarch/bin/retroarch -f') end),
+    awful.key({ ""    ,           }, "XF86Search", function () awful.util.spawn('firefox http://duckduckgo.com') end),
+    awful.key({ ""    ,           }, "XF86HomePage", function () awful.util.spawn('firefox') end),
+    awful.key({ modkey, "Control" }, "r", awesome.restart)
+)
+
+clientkeys = awful.util.table.join(
+    awful.key({ modkey,           }, "Escape", function (c) c:kill()                         end),
+    awful.key({ modkey,           }, "space",  awful.client.floating.toggle                     )
+)
+
+clientbuttons = awful.util.table.join(
+    awful.button({ }, 1, function (c) client.focus = c; c:raise() end),
+    awful.button({ modkey }, 1, awful.mouse.client.move),
+    awful.button({ modkey }, 3, awful.mouse.client.resize))
+
+root.keys(globalkeys)
+
+awful.rules.rules = {
+    -- All clients will match this rule.
+    { rule = { },
+      properties = { border_width = beautiful.border_width,
+                     border_color = beautiful.border_normal,
+                     focus = true,
+                     keys = clientkeys,
+                     buttons = clientbuttons } },
+}
+
+client.add_signal("manage", function (c, startup)
+    c:add_signal("mouse::enter", function(c)
+        if awful.layout.get(c.screen) ~= awful.layout.suit.magnifier
+            and awful.client.focus.filter(c) then
+            client.focus = c
+        end
+    end)
+
+    if not startup then
+        if not c.size_hints.user_position and not c.size_hints.program_position then
+            awful.placement.no_overlap(c)
+            awful.placement.no_offscreen(c)
+        end
+    end
+end)
+
+client.add_signal("focus", function(c) c.border_color = beautiful.border_focus end)
+client.add_signal("unfocus", function(c) c.border_color = beautiful.border_normal end)
+EOF
+}
+
+media__awesome_theme_lua() {
+  cat <<EOF
+theme = {}
+theme.font          = "sans 24"
+theme.bg_normal     = "#222222"
+theme.bg_focus      = "#336ddc"
+theme.bg_urgent     = "#aa4433"
+theme.bg_minimize   = "#444444"
+theme.fg_normal     = "#cccccc"
+theme.fg_focus      = "#ffffff"
+theme.fg_urgent     = "#ffffff"
+theme.fg_minimize   = "#ffffff"
+theme.border_width  = "0"
+theme.border_normal = "#000000"
+theme.border_focus  = "#ffffff"
+theme.border_marked = "#cccccc"
+theme.taglist_squares_sel   = "/usr/share/awesome/themes/default/taglist/squarefw.png"
+theme.taglist_squares_unsel = "/usr/share/awesome/themes/default/taglist/squarew.png"
+theme.tasklist_floating_icon = "/usr/share/awesome/themes/default/tasklist/floatingw.png"
+theme.menu_submenu_icon = "/usr/share/awesome/themes/default/submenu.png"
+theme.menu_height = "50"
+theme.menu_width  = "600"
+theme.wallpaper_cmd = { "awsetbg /usr/share/kodi/media/Splash.png" }
+
+return theme
 EOF
 }
 
