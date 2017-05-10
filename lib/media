@@ -30,12 +30,12 @@ LICENSE
 
 media_setup() {
   require settings
-  require utils setup
+  settings prompt_path KODIDIR "/var/lib/kodi" "Kodi home directory"
+  settings prompt_bool RETROARCH "true" "Install RetroArch ?"
+  settings save
+
   require mass setup
 
-  settings prompt_path KODIDIR "/var/lib/kodi" "Kodi home directory"
-  settings prompt_bool RETROARCH "true" "Deploy RetroArch ?"
-  settings save
   rm -r "$KODIDIR"
 
   utils client
@@ -44,6 +44,8 @@ media_setup() {
   syspackage kodi kodi
   syspackage speedcrunch speedcrunch
   syspackage awesome awesome
+  syspackage firefox-esr
+  syspackage numlockx numlockx
   adduser --home "$KODIDIR" --disabled-password --gecos "Kodi user for ${SC},,," kodi
 
   # Build lightdm configuration
@@ -211,7 +213,7 @@ globalkeys = awful.util.table.join(
     -- Standard program
     awful.key({ modkey,           }, "Return", function () awful.util.spawn(terminal) end),
     awful.key({ ""    ,           }, "XF86Explorer", function () awful.util.spawn(terminal) end),
-    awful.key({ ""    ,           }, "XF86Tools", function () awful.util.spawn('/var/lib/kodi/retroarch/bin/retroarch -f') end),
+    awful.key({ ""    ,           }, "XF86Tools", function () awful.util.spawn('$KODIDIR/retroarch/bin/retroarch -f') end),
     awful.key({ ""    ,           }, "XF86Search", function () awful.util.spawn('firefox http://duckduckgo.com') end),
     awful.key({ ""    ,           }, "XF86HomePage", function () awful.util.spawn('firefox') end),
     awful.key({ modkey, "Control" }, "r", awesome.restart)
