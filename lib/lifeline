@@ -34,6 +34,7 @@ lifeline_setup() {
   require daemon
 
   settings prompt LIFELINE_TARGET "" "Enter the lifeline target host"
+  settings prompt LIFELINE_PORT "22000" "Enter the remote port to open on the target host"
   sshlink add "$LIFELINE_TARGET"
   daemon add lifeline
 
@@ -42,7 +43,13 @@ lifeline_setup() {
 
 lifeline_cleanup() {
   require daemon
+  require settings
+
   daemon del lifeline
+  settings del LIFELINE_TARGET
+  settings del LIFELINE_PORT
+
+  settings save
 }
 
 lifeline_ready() {
@@ -53,9 +60,10 @@ lifeline_ready() {
 }
 
 lifeline_daemon() {
-  exec ssh -o ServerAliveInterval=10 -N -R 22000:localhost:22 "$LIFELINE_TARGET"
+  exec ssh -o ServerAliveInterval=10 -N -R "$LIFELINE_PORT":localhost:22 "$LIFELINE_TARGET"
 }
 
 lifeline_settings() {
   echo "LIFELINE_TARGET"
+  echo "LIFELINE_PORT"
 }

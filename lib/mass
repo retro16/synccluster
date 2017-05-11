@@ -41,7 +41,12 @@ mass_setup() {
       unison "Unison synchronization" \
       sshfs "SSHFS remote access" \
       nfs4 "NFSv4 remote access with cachefilesd"
-    settings set MASSBACKUP 1 # Do not backup slave mass directory
+
+    if [ "$MASSMODE" = "separated" ]; then
+      settings prompt_bool MASSBACKUP "" "Backup mass directory ?"
+    else
+      settings set MASSBACKUP 1 # Do not backup slave mass directory
+    fi
     mass setup_sync
   fi
 

@@ -76,7 +76,7 @@ wstunnel_ready() {
 
 wstunnel_daemon() {
   if [ "$WSTUNNEL_MODE" = "client" ]; then
-    exec -t 8022 https://"$MASTER"/wstunnel
+    exec /usr/local/bin/wstunnel -t 8022 https://"$MASTER"/wstunnel
   else
     exec /usr/local/bin/wstunnel -s 8022 -t 127.0.0.1:22
   fi

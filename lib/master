@@ -167,9 +167,15 @@ master__unsupported() {
   exit 1
 }
 
+master__require_newmaster() {
+  local newmode="$1"; shift
+  echo "$newmode requires a 2nd parameter to define its master host"
+  exit 1
+}
+
 master_promote() {
   local newmode="$1"; shift || newmode="master"
-  local newmaster="$1"; shift
+  local newmaster="$1"; shift || true
 
   if ! master ready; then
     echo "Master package not configured"
@@ -201,6 +207,7 @@ master_promote() {
     "master")
       case "$newmode" in
         "standby")
+          master__require_newmaster
           MASTER="$newmaster"
           master__link
           require unisonsync setup

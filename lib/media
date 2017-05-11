@@ -47,6 +47,8 @@ media_setup() {
   syspackage awesome awesome
   syspackage firefox-esr
   syspackage numlockx numlockx
+  syspackage pavucontrol pavucontrol
+  syspackage pulseaudio pulseaudio
 
   # Build lightdm configuration
   sed -i -e 's/^#user-session=.*/user-session=lightdm-xsession/' /etc/lightdm/lightdm.conf
