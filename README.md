@@ -25,14 +25,11 @@ synccluster installs the following files:
  * /usr/local/lib/sc : Modules
  * /etc/sc : Configuration file
 
-
-## Update synccluster
+## Update synccluster
 
 As root, run the following command:
 
-
     sc update start
-
 
 # Concepts
 
