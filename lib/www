@@ -154,8 +154,8 @@ www_sync() {
 
   if ! contains "$mode" standby; then return 0; fi
 
-  require sshlink
-  sshlink getfiles "$host:$(sshlink getvar WWWDIR)" "$WWWDIR" <<< "html"
+  require master
+  sshlink getfiles "$host:$(master getvar WWWDIR)" "$WWWDIR" <<< "html"
 }
 
 www_enabled() {

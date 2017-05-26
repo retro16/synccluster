@@ -197,6 +197,7 @@ master_promote() {
         "master")
           require crontask
           crontask del master daily
+          crontask del master fast
           settings del MASTER
           ;;
         *)
@@ -213,6 +214,7 @@ master_promote() {
           require unisonsync setup
           require crontask
           crontask add master daily
+          crontask add master fast
           ;;
         *)
           master__unsupported "$newmode"
