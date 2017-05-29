@@ -44,6 +44,7 @@ EOF
 
 master__link() {
   require settings
+  require sshlink
   settings prompt MASTER "" "Enter master server host"
   if [ -z "$MASTER" ]; then
     echo "Error: master server empty"
@@ -168,19 +169,16 @@ master__unsupported() {
 }
 
 master__require_newmaster() {
-  local newmode="$1"; shift
-  echo "$newmode requires a 2nd parameter to define its master host"
-  exit 1
+  local newmode="$1"
+  if [ -z "$newmode" ]; then
+    echo "$newmode requires a 2nd parameter to define its master host"
+    exit 1
+  fi
 }
 
 master_promote() {
   local newmode="$1"; shift || newmode="master"
   local newmaster="$1"; shift || true
-
-  if ! master ready; then
-    echo "Master package not configured"
-    exit 2
-  fi
 
   if [ "$newmode" = "$(master mode)" ]; then
     echo "Already in $newmode mode"
@@ -208,9 +206,10 @@ master_promote() {
     "master")
       case "$newmode" in
         "standby")
-          master__require_newmaster
+          master__require_newmaster "$newmaster"
           MASTER="$newmaster"
           master__link
+          settings save
           require unisonsync setup
           require crontask
           crontask add master daily

@@ -78,7 +78,7 @@ unisonsync_add() {
   cat > "$UNISON/$(unisonsync profilename "$host" "$remotepath" "$period").prf" << EOF
 include _common
 root = $localpath
-root = ssh://$USER@$host/$remotepath
+root = ssh://root@$host/$remotepath
 EOF
 
   unisonsync__remotesetup "$host"
