@@ -92,7 +92,7 @@ user_hasgroup() {
 # Import a user from the master on a roaming machine
 user_roam() {
   local login="$1"; shift
-  if grep -E "^$login:" /etc/passwd; then return 0; fi
+  if grep -E "^$login:" /etc/passwd &>/dev/null; then return 0; fi
   if ! has master; then return 0; fi
 
   master sc user export "$login" | IFS=: read user pass uid gid name homedir shell
@@ -211,11 +211,11 @@ EOF
   done
 
   # Update sudoers
-  if grep -E "^sudo:x:" &>/dev/null "$TEMP_FILE/group.new"; then
+  if grep -E "^sudo:x:" "$TEMP_FILE/group.new" &>/dev/null; then
     grep -vE "^sudo:x:" "$TEMP_FILE/group.new" > "$TEMP_FILE/group.new."
     sudoers="$(grep -E "^sudo:x:" "$TEMP_FILE/group.new" | cut -d: -f1-3):"
     while read user; do
-      if grep -E "^$user:x:100[0-9][0-9]:" "$TEMP_FILE/passwd.new"; then
+      if grep -E "^$user:x:100[0-9][0-9]:" "$TEMP_FILE/passwd.new" &>/dev/null; then
         sudoers="$sudoers$user,"
         break
       fi
@@ -235,7 +235,7 @@ EOF
 
   # Remove obsolete users
   grep -E ":x:100[0-9][0-9]:" /etc/passwd | while IFS=':' read user pass uid gid name homedir shell; do
-    if ! grep -E "^$user:" "$TEMP_FILE"/etc/passwd; then
+    if ! grep -E "^$user:" "$TEMP_FILE"/etc/passwd &>/dev/null; then
       echo "User $user was removed remotely. Home directory left untouched."
       userdel "$user"
       if contains "$mode" standby roaming && has unisonsync; then
@@ -246,7 +246,7 @@ EOF
 
   # Remove obsolete groups
   grep -E ":x:100[0-9][0-9]:" /etc/group | while IFS=':' read group pass gid members; do
-    if ! grep -E "^$group:" "$TEMP_FILE"/etc/group; then
+    if ! grep -E "^$group:" "$TEMP_FILE"/etc/group &>/dev/null; then
       echo "Group $group was removed remotely."
       groupdel "$group"
     fi
@@ -319,14 +319,14 @@ user_restoresudoers() {
 
   local sourcegroup="$source/fs/etc/group"
 
-  if grep -E "^sudo:x:" &>/dev/null "/etc/group"; then
+  if grep -E "^sudo:x:" "/etc/group" &>/dev/null; then
     require temp
     temp file
 
     grep -vE "^sudo:x:" /etc/group > "$TEMP_FILE"
     sudoers="$(grep -E "^sudo:x:" /etc/group | cut -d: -f1-3):"
     while read user; do
-      if grep -E "^$user:" /etc/passwd; then
+      if grep -E "^$user:" /etc/passwd &>/dev/null; then
         sudoers="$sudoers$user,"
         break
       fi
