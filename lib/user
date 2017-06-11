@@ -183,7 +183,7 @@ EOF
 
   grep -E ":x:100[0-9][0-9]:" "$TEMP_FILE/etc/group" | while IFS=':' read group pass gid members; do
     # Add group if missing
-    if ! grep -E "^$group:x:" "$TEMP_FILE/group.new"; then
+    if ! grep -E "^$group:x:" "$TEMP_FILE/group.new" &>/dev/null; then
       grep -E "^$group:x:" "$TEMP_FILE/etc/group" >> "$TEMP_FILE/group.new"
       grep -E "^$group:" "$TEMP_FILE/etc/gshadow" >> "$TEMP_FILE/gshadow.new"
     fi

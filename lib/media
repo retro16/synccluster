@@ -282,8 +282,10 @@ EOF
 }
 
 media_files() {
-  echo "/etc/lightdm/lightdm.conf"
-  echo "$KODIDIR"
+  if media ready; then
+    echo "/etc/lightdm/lightdm.conf"
+    echo "$KODIDIR"
+  fi
 }
 
 media_settings() {
