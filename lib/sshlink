@@ -231,6 +231,7 @@ sshlink_exclude_list() {
 - tmp
 - Download.*
 - Téléchargements
+- .cache
 EOF
 }
 

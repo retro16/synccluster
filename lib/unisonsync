@@ -232,6 +232,7 @@ ignore = Path .nv
 ignore = Path .wine
 ignore = Path .thumbnails
 ignore = Path .gstreamer-*
+ignore = Path .cache
 EOF
 }
 
