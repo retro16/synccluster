@@ -28,58 +28,62 @@ LICENSE
 ###############################################################################
 
 
-owncloud_version="9.1.0"
-owncloud_url="https://download.owncloud.org/community/owncloud-${owncloud_version}.tar.bz2"
+cloud_version="12.0.3"
+cloud_url="https://download.nextcloud.com/server/releases/nextcloud-${cloud_version}.zip"
 
-owncloud_setup() {
+cloud_setup() {
   require www setup
   require settings
 
-  settings prompt OWNCLOUD_PASSWORD "" "Owncloud admin and database password"
+  settings prompt CLOUD_PASSWORD "" "Owncloud admin and database password"
   settings prompt_path CLOUDDIR "/srv/cloud" "Owncloud storage path"
   syspackage smbclient smbclient
 
   chown -R www-data:www-data "$CLOUDDIR"
 
-  [ -e "$WWWDIR/owncloud" ] || owncloud get
-  owncloud apache_conf | www addconf owncloud
-  owncloud create_db
-  owncloud init
-  owncloud config
+  [ -e "$WWWDIR/cloud" ] || cloud get
+  cloud apache_conf | www addconf cloud
+  cloud create_db
+  cloud init
+  cloud config
 
   settings save
 
   chown -R root:www-data "$CLOUDDIR/.htaccess"
 }
 
-owncloud_cleanup() {
+cloud_cleanup() {
   require www
   require db
 
-  www delconf owncloud
-  rm -rf "$WWWDIR/owncloud"
-  db del owncloud owncloud
+  www delconf cloud
+  rm -rf "$WWWDIR/cloud"
+  db del cloud cloud
 }
 
-owncloud_get() {
+cloud_get() {
+  syspackage unzip unzip
+  require temp
   temp file
-  wget -O"$TEMP_FILE" "$owncloud_url"
+  wget -O"$TEMP_FILE" "$cloud_url"
 
-  tar -C "$WWWDIR" -xvjf "$TEMP_FILE"
-  chown -R www-data:www-data "$WWWDIR/owncloud/apps"
-  chown -R www-data:www-data "$WWWDIR/owncloud/config"
-  chown -R www-data:www-data "$WWWDIR/owncloud/themes"
-  chown -R root:www-data "$WWWDIR/owncloud/.htaccess"
+  unzip "$TEMP_FILE" -d "$WWWDIR"
+  mv "$WWWDIR/nextcloud" "$WWWDIR/cloud"
+  chown -R www-data:www-data "$WWWDIR/cloud/apps"
+  chown -R www-data:www-data "$WWWDIR/cloud/config"
+  chown -R www-data:www-data "$WWWDIR/cloud/themes"
+  chown -R root:www-data "$WWWDIR/cloud/.htaccess"
 
   temp release
 }
 
-owncloud_apache_conf() {
+cloud_apache_conf() {
   cat <<EOF
-Alias /cloud "$WWWDIR/owncloud/"
+Alias /cloud "$WWWDIR/cloud"
 Redirect 301 /owncloud /cloud
+Redirect 301 /nextcloud /cloud
 
-<Directory "$WWWDIR/owncloud">
+<Directory "$WWWDIR/cloud">
     Options +FollowSymLinks
     AllowOverride All
 
@@ -87,8 +91,8 @@ Redirect 301 /owncloud /cloud
       Dav off
     </IfModule>
 
-    SetEnv HOME $WWWDIR/owncloud
-    SetEnv HTTP_HOME $WWWDIR/owncloud
+    SetEnv HOME $WWWDIR/cloud
+    SetEnv HTTP_HOME $WWWDIR/cloud
 </Directory>
 
 <Directory "$CLOUDDIR/">
@@ -101,22 +105,22 @@ Redirect 301 /.well-known/caldav  /cloud/remote.php/caldav
 EOF
 }
 
-owncloud_create_db() {
-  require db
+cloud_create_db() {
+  require db setup
 
-  db add owncloud "$OWNCLOUD_PASSWORD" owncloud
+  db add cloud "$CLOUD_PASSWORD" cloud
 }
 
-owncloud_init() {
-  owncloud occ maintenance:install --database pgsql --database-name owncloud --database-host localhost --database-user owncloud --database-pass "${OWNCLOUD_PASSWORD}" --admin-user admin --admin-pass "${OWNCLOUD_PASSWORD}" --data-dir "$CLOUDDIR"
-  owncloud occ app:enable external
-  owncloud occ app:enable user_external
+cloud_init() {
+  cloud occ maintenance:install --database pgsql --database-name cloud --database-host localhost --database-user cloud --database-pass "${CLOUD_PASSWORD}" --admin-user admin --admin-pass "${CLOUD_PASSWORD}" --data-dir "$CLOUDDIR"
+  cloud occ app:enable files_external
+  cloud occ app:enable user_external
 }
 
-owncloud_config() {
+cloud_config() {
   require temp
   temp file
-  head -n -1 "$WWWDIR/owncloud/config/config.php" > "$TEMP_FILE"
+  head -n -1 "$WWWDIR/cloud/config/config.php" > "$TEMP_FILE"
   cat >> "$TEMP_FILE" <<EOF
   'memcache.local' => '\\\\OC\\\\Memcache\\\\APCu',
   'user_backends' => 
@@ -135,15 +139,15 @@ EOF
   require hostconf setup
   sed -i "/    0 => 'localhost',/a    1 => '$(hostconf domain)'," "$TEMP_FILE"
   chown www-data:www-data "$TEMP_FILE"
-  mv "$TEMP_FILE" "$WWWDIR/owncloud/config/config.php"
+  mv "$TEMP_FILE" "$WWWDIR/cloud/config/config.php"
   temp forget
 }
 
-owncloud_occ() {
+cloud_occ() {
   trap "sed -i 's;^\\(www-data:.*:\\).*;\\1/usr/sbin/nologin;' /etc/passwd" EXIT
   sed -i 's;^\(www-data:.*:\).*;\1/bin/bash;' /etc/passwd
 
-  pushd "$WWWDIR/owncloud" &>/dev/null
+  pushd "$WWWDIR/cloud" &>/dev/null
   su -c "php occ $*" www-data
   popd &>/dev/null
 
@@ -151,56 +155,60 @@ owncloud_occ() {
   trap EXIT
 }
 
-owncloud_db() {
-  echo "owncloud:owncloud"
+cloud_db() {
+  echo "cloud:cloud"
 }
 
-owncloud_files() {
+cloud_files() {
   cat <<EOF
-$WWWDIR/owncloud/config/config.php
+$WWWDIR/cloud/config/config.php
 $CLOUDDIR
 EOF
 }
 
-owncloud_restore() {
+cloud_restore() {
   local source="$1"; shift
   require db
   require files
+  require settings
 
-  db restoremodule owncloud "$source"
-  files restoremodule owncloud "$source"
+  settings import cloud "$source"
+  require cloud setup
+  db restoremodule cloud "$source"
+  files restoremodule cloud "$source"
+  cloud occ upgrade
 }
 
-owncloud_sync() {
+cloud_sync() {
   local host="$1"; shift
   local mode="$1"; shift
 
   if [ "$mode" != standby ]; then return 0; fi
 
   require db
-  db pull owncloud "$host"
+  db pull cloud "$host"
 
   require sshlink
-  sshlink getfiles "$host" <<< "$WWWDIR/owncloud/config/config.php"
+  sshlink getfiles "$host" <<< "$WWWDIR/cloud/config/config.php"
 
   require unisonsync
   unisonsync start "$host" "$(sshlink sc "$host" settings get CLOUDDIR)" "$CLOUDDIR"
 }
 
-owncloud_ready() {
-  if [ -d "$CLOUDDIR" ] && [ -e "$WWWDIR/owncloud/config/config.php" ] && has db && db has owncloud && has www && www hasconf owncloud; then
+cloud_ready() {
+  if [ -d "$CLOUDDIR" ] && [ -e "$WWWDIR/cloud/config/config.php" ] && has db && db has cloud && has www && www hasconf cloud; then
     return 0
   fi
   return 1
 }
 
-owncloud_settings() {
-  echo OWNCLOUD_PASSWORD
+cloud_settings() {
+  echo CLOUD_PASSWORD
   echo CLOUDDIR
 }
 
-owncloud_upgrade_1005() {
-  if owncloud ready; then
+cloud_upgrade_1005() {
+  if cloud ready; then
     syspackage smbclient smbclient
   fi
 }

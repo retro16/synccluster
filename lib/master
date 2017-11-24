@@ -90,7 +90,7 @@ master_setup() {
       require nfssrv setup
       require mail setup
       require roundcube setup
-      require owncloud setup
+      require cloud setup
       require wstunnel setup
       require user setup
       master__allow_root_ssh
@@ -99,12 +99,12 @@ master_setup() {
     "standby")
       require ssl
       ssl sync "$MASTER" standby
-      sshlink importsettings "$MASTER" mass unisonsync mail roundcube owncloud update
+      sshlink importsettings "$MASTER" mass unisonsync mail roundcube cloud update
       require mass setup
       require nfssrv setup
       require mail setup
       require roundcube setup
-      require owncloud setup
+      require cloud setup
       require wstunnel setup
       require user setup
       require unisonsync setup
@@ -362,7 +362,7 @@ master_ready() {
         if has nfssrv && nfssrv ready \
         && has mail && mail ready \
         && has roundcube && roundcube ready \
-        && has owncloud && owncloud ready \
+        && has cloud && cloud ready \
         && has wstunnel && wstunnel ready; then
           return 0
         fi
@@ -372,7 +372,7 @@ master_ready() {
         && has nfssrv && nfssrv ready \
         && has mail && mail ready \
         && has roundcube && roundcube ready \
-        && has owncloud && owncloud ready \
+        && has cloud && cloud ready \
         && has wstunnel && wstunnel ready; then
           return 0
         fi
@@ -383,9 +383,12 @@ master_ready() {
         fi
         ;;
       client)
-        if has nfsclient && nfsclient has /home && has mass && nfsclient has "$MASSDIR" && has boot && boot has master; then
+        if has nfsclient && nfsclient has /home && has boot && boot has master; then
           return 0
         fi
+        ;;
+      roaming)
+        return 0
         ;;
     esac
   fi

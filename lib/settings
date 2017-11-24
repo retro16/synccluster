@@ -49,8 +49,8 @@ settings_list() {
 settings_print() {
   local mod="$1"; shift || true
 
-  if [ "$mod" ]; then
-    require "$mod"
+  if [ "$m" ]; then
+    require "$m"
     if [ "$(type -t "${m}_settings")" = "function" ]; then
       for s in $("${m}_settings"); do
         if [ "${!s+x}" ]; then
@@ -100,6 +100,21 @@ settings_del() {
 settings_get() {
   local name="$1"; shift
   echo "${!name}"
+}
+
+settings_import() {
+  local m="$1"; shift
+  local source="$1"; shift
+
+  require "$m"
+  if [ "$(type -t "${m}_settings")" = "function" ]; then
+    for s in $("${m}_settings"); do
+      if [ -r "$source"/sc ]; then
+        declare -g "$(grep -E "^$s=" "$source"/sc)";
+      fi
+    done
+  fi
+  settings save
 }
 
 # Set a setting

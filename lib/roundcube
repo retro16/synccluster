@@ -74,7 +74,10 @@ roundcube_restore() {
   local source="$1"; shift
   require db
   require files
+  require settings
 
+  settings import roundcube "$source"
+  require roundcube setup
   db restoremodule roundcube "$source"
   files restoremodule roundcube "$source"
 }

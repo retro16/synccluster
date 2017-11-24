@@ -41,33 +41,18 @@ deb $MIRROR $DISTNAME contrib non-free
 deb-src $MIRROR $DISTNAME contrib non-free
 EOF
 
-  cat > /etc/apt/sources.list.d/${SC}_firefox.list << EOF
-deb http://mozilla.debian.net/ $DISTNAME-backports firefox-release
-EOF
-
-  apt update
-
-  require temp
-  syspackage wget wget
-  temp file
-  wget -O"$TEMP_FILE" http://mozilla.debian.net/pkg-mozilla-archive-keyring_1.1_all.deb
-  dpkg -i "$TEMP_FILE"
-  temp release
-
   apt update
 }
 
 aptpackage_cleanup() {
   rm -f /etc/apt/sources.list.d/${SC}_backports.list \
         /etc/apt/sources.list.d/${SC}_contrib.list \
-        /etc/apt/sources.list.d/${SC}_firefox.list
   apt update
 }
 
 aptpackage_ready() {
   if [ -e /etc/apt/sources.list.d/${SC}_backports.list ] && \
-     [ -e /etc/apt/sources.list.d/${SC}_contrib.list ] && \
-     [ -e /etc/apt/sources.list.d/${SC}_firefox.list ]; then
+     [ -e /etc/apt/sources.list.d/${SC}_contrib.list ]; then
     return 0
   fi
   return 1

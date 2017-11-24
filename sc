@@ -239,7 +239,7 @@ syspackage() {
   fi
 
   for c in "$@"; do
-    if ! [ -e "$c" ] && ! which "$c" &>/dev/null; then
+    if ( [ "${c:0:1}" != "/" ] || ! [ -e "$c" ] ) && ! which "$c" &>/dev/null; then
       if apt-get -y install "$package"; then
         return 0
       else

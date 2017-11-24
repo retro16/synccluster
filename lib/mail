@@ -30,14 +30,18 @@ LICENSE
 
 mail_setup() {
   require settings
+  require cron
   require ssl setup
 
   syspackage postfix postfix
   syspackage dovecot-imapd doveadm
   syspackage procmail procmail
   syspackage spamassassin spamassassin
+  syspackage re2c re2c
 
   settings prompt_path MAILDIR "/var/mail" "Enter mail directory:"
+  settings prompt SPAMMAILDIR "Junk" "Name of the SPAM mail directory:"
+  settings prompt HAMMAILDIR "Good" "Name of the HAM mail directory (email known as good):"
 
   chmod 1777 "$MAILDIR"
 
@@ -50,6 +54,8 @@ mail_setup() {
 
   systemctl enable postfix
   systemctl restart postfix
+
+  crontask add mail daily
 
   newaliases
 
@@ -74,6 +80,7 @@ mail_files() {
   echo "/etc/aliases"
   echo "/etc/procmailrc"
   echo "/etc/dovecot/dovecot.conf"
+  echo "/var/lib/spamassassin"
   echo "$MAILDIR"
 }
 
@@ -121,7 +128,7 @@ DEFAULT=\${EPREFIX}$MAILDIR/\$LOGNAME/Maildir/
 
 :0:
 * ^X-Spam-Status: Yes
-${EPREFIX}/var/mail/$LOGNAME/Maildir/Spam/
+${EPREFIX}/var/mail/$LOGNAME/Maildir/$SPAMMAILDIR/
 EOF
 }
 
@@ -162,6 +169,19 @@ ssl_cipher_list = ALL:!LOW:!SSLv2:ALL:!aNULL:!ADH:!eNULL:!EXP:RC4+RSA:+HIGH:+MED
 EOF
 }
 
+mail_cron() {
+  local period="$1"; shift
+
+  if [ "$mode" != master ]; then return 0; fi
+
+  # Update spamassassin
+  sa-learn --spam "$MAILDIR"/*/Maildir/"$SPAMMAILDIR"/{cur,new}
+  sa-learn --ham "$MAILDIR"/*/Maildir/"$HAMMAILDIR"/{cur,new}
+
+  # Get rid of old spam
+  find "$MAILDIR"/*/Maildir/"$SPAMMAILDIR"/{cur,new}/ -name '[0-9]*.*.*' -type f -mtime +7 -exec rm {} \;
+}
+
 mail_sync() {
   local host="$1"; shift
   local mode="$1"; shift
@@ -177,6 +197,7 @@ mail_sync() {
 /etc/aliases
 /etc/procmailrc
 /etc/dovecot/dovecot.conf
+/var/lib/spamassassin
 EOF
 
   systemctl restart postfix
@@ -202,6 +223,8 @@ mail_restore() {
 
 mail_settings() {
   echo MAILDIR
+  echo SPAMMAILDIR
+  echo HAMMAILDIR
 }
 
 mail_upgrade_1005() {
