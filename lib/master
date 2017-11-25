@@ -30,6 +30,12 @@ LICENSE
 
 # Module to access master server
 
+master_requires() {
+  echo settings
+  echo user
+  echo sshlink
+}
+
 master_help() {
 cat <<EOF
 $SC master
@@ -43,8 +49,6 @@ EOF
 }
 
 master__link() {
-  require settings
-  require sshlink
   settings prompt MASTER "" "Enter master server host"
   if [ -z "$MASTER" ]; then
     echo "Error: master server empty"
@@ -63,8 +67,6 @@ master__link() {
 
 master_setup() {
   local backupsource="$1"; shift || true
-  require settings
-  require sshlink
 
   syspackage rsync rsync
 
@@ -109,7 +111,7 @@ master_setup() {
       require user setup
       require unisonsync setup
       require crontask
-      require sshlink
+      
       require nfsclient
       crontask add master daily
       crontask add master fast
@@ -184,8 +186,7 @@ master_promote() {
     echo "Already in $newmode mode"
     exit 2
   fi
-
-  require settings
+  
   local oldmode="$(master mode)"
   MASTER_MODE="$newmode"
 
@@ -257,6 +258,7 @@ master_promote() {
   settings save
 }
 
+# Change master server
 master_switch() {
   local newmaster="$1"; shift || { echo "New master name required."; exit 1; }
 
@@ -333,7 +335,6 @@ master_boot() {
 
 # Undo the link to the master
 master_cleanup() {
-  require settings
   unset MASTER
   unset MASTER_MODE
   settings save
@@ -429,7 +430,6 @@ master_buildnumber() {
 
 master_update_sc() {
   if [ "$MASTER" ]; then
-    require sshlink
     local remoteversion="$(sshlink sc "$MASTER" master buildnumber || true)"
     if [ "$remoteversion" = "Cannot find $SC master buildnumber" ]; then
       echo "$SC on $MASTER does not support update"
