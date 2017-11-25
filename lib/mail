@@ -28,9 +28,15 @@ LICENSE
 ###############################################################################
 
 
+mail_requires() {
+  echo ssl
+  echo user
+  echo settings
+  echo cron
+  echo hostconf
+}
+
 mail_setup() {
-  require settings
-  require cron
   require ssl setup
 
   syspackage postfix postfix
@@ -208,13 +214,9 @@ EOF
 
 mail_restore() {
   local source="$1"; shift
-  require files
+  require backup
 
-  if ! [ "$MAILDIR" ]; then
-    return 0
-  fi
-
-  files restoremodule mail "$source"
+  backup restoremodule mail "$source"
 
   newaliases
   systemctl restart dovecot

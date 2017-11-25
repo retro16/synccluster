@@ -144,8 +144,25 @@ backup_start() {
   fi
 }
 
-backup_restore_from() {
+backup_contains() {
   local source="$1"; shift
+  local mod="$1"; shift
+
+  require settings
+  require files
+  require db
+
+  require "$mod"
+  settings source_contains "$source" "$mod" \
+  && files source_contains "$source" "$mod" \
+  && db source_contains "$source" "$mod"
+}
+
+backup_restorefrom() {
+  local source="$1"; shift
+
+  require settings
+  local source_version="$(settings source_version "$source")"
 
   if [ -e "$source/$SC" ]; then
     syspackage dialog dialog
@@ -155,9 +172,37 @@ backup_restore_from() {
     fi
   fi
 
-  require user
-  user restore "$source"
-  broadcall restore "$source"
+  for mod in $(modlist); do
+    backup restoremodule "$mod" "$source"
+  done
+  upgrade_modules "$source_version" "$SCVERSION"
+  SETTING_VERSION="$SCVERSION"
+  settings save
+}
+
+backup_restoremodule() {
+  local mod="$1"; shift
+  local source="$1"; shift
+
+  require "$mod"
+  if cancall "$mod" restore; then
+    "$mod" restore "$source" "$source_version"
+  else
+    require "$mod" setup
+    settings import "$source" "$mod"
+    files restoremodule "$mod" "$source"
+    db restoremodule "$mod" "$source"
+  fi
+}
+
+backup__restore_files() {
+  local mod="$1"; shift
+  local source="$1"; shift
+}
+
+backup__restore_db() {
+  local mod="$1"; shift
+  local source="$1"; shift
 }
 
 backup_enabled() {
@@ -168,15 +213,13 @@ backup_enabled() {
 }
 
 backup_ready() {
-  if backup enabled \
+  require settings
+  settings ready backup \
+  && [ -d "$BACKUP_DIR" ] \
   && has crontask \
   && crontask has backup hourly \
   && crontask has backup daily \
-  && crontask has backup weekly \
-  ; then
-    return 0
-  fi
-  return 1
+  && crontask has backup weekly
 }
 
 backup_sync() {

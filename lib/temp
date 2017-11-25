@@ -32,21 +32,21 @@ LICENSE
 
 temp_dir() {
   local varname="$1"; shift || varname="TEMP_FILE"
-  declare -g "$varname"="$(mktemp -d)"
+  eval "$varname"="$(mktemp -d)"
   TRAPS="$TRAPS"$'\n'"rm -rf '${!varname}';"
   trap "$TRAPS" EXIT
 }
 
 temp_file() {
   local varname="$1"; shift || varname="TEMP_FILE"
-  declare -g "$varname"="$(mktemp)"
+  eval "$varname"="$(mktemp)"
   TRAPS="$TRAPS"$'\n'"rm -rf '${!varname}';"
   trap "$TRAPS" EXIT
 }
 
 temp_filename() {
   local varname="$1"; shift || varname="TEMP_FILE"
-  declare -g "$varname"="$(mktemp -u)"
+  eval "$varname"="$(mktemp -u)"
   TRAPS="$(head -n -1 <<< "$TRAPS")"
   trap "$TRAPS" EXIT
 }

@@ -28,8 +28,12 @@ LICENSE
 ###############################################################################
 
 
+www_requires() {
+  echo settings
+  echo nginx
+}
+
 www_setup() {
-  require settings
   require nginx setup
 
   syspackage apache2 apache2ctl
@@ -61,14 +65,7 @@ www_files() {
   echo "$WWWDIR/html"
 }
 
-www_restore() {
-  local source="$1"
-  require files
-  files restoremodule www "$source"
-}
-
 www_cleanup() {
-  require settings
   unset WWWDIR
   rm "/etc/apache2/conf-available/${SC}_"*.conf
   rm "/etc/apache2/conf-enabled/${SC}_"*.conf
@@ -134,6 +131,7 @@ www_sync() {
   if ! contains "$mode" standby; then return 0; fi
 
   require master
+  require sshlink
   sshlink getfiles "$host:$(master getvar WWWDIR)" "$WWWDIR" <<< "html"
 }
 

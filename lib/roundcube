@@ -30,9 +30,17 @@ LICENSE
 
 roundcube_version="1.1.4"
 
+roundcube_requires() {
+  echo hostconf
+  echo www
+  echo mail
+  echo db
+  echo files
+  echo settings
+}
+
 roundcube_setup() {
-  require www setup
-  require mail setup
+  depsetup roundcube
 
   if ! [ -d "$WWWDIR/roundcubemail" ]; then
     roundcube download
@@ -43,17 +51,13 @@ roundcube_setup() {
 }
 
 roundcube_cleanup() {
-  require www
-  require db
-
   rm -rf "$WWWDIR/roundcubemail" "$WWWDIR/roundcubemail-$roundcube_version"
   www delconf roundcubemail
   db del roundcubemail
 }
 
 roundcube_ready() {
-  if has www \
-  && [ -e "$WWWDIR/roundcubemail-$roundcube_version" ] \
+  if [ -e "$WWWDIR/roundcubemail-$roundcube_version" ] \
   && [ "$(readlink -fs "$WWWDIR/roundcubemail")" = "$WWWDIR/roundcubemail-$roundcube_version" ] \
   && www hasconf roundcubemail; then
     return 0
@@ -62,24 +66,11 @@ roundcube_ready() {
 }
 
 roundcube_files() {
-  require www
   echo "$WWWDIR/roundcubemail-$roundcube_version/config/config.inc.php"
 }
 
 roundcube_db() {
   echo "roundcubemail:roundcubemail"
-}
-
-roundcube_restore() {
-  local source="$1"; shift
-  require db
-  require files
-  require settings
-
-  settings import roundcube "$source"
-  require roundcube setup
-  db restoremodule roundcube "$source"
-  files restoremodule roundcube "$source"
 }
 
 roundcube_sync() {
@@ -88,10 +79,7 @@ roundcube_sync() {
 
   if ! contains "$mode" standby; then return 0; fi
 
-  require files
   files pull roundcube "$host"
-
-  require db
   db pull roundcube "$host"
 }
 
@@ -116,14 +104,11 @@ roundcube_download() {
 roundcube_install() {
   roundcube create_db
   roundcube conf > "$WWWDIR/roundcubemail/config/config.inc.php"
-  #git_get https://github.com/blind-coder/rcmcarddav.git "$WWWDIR/roundcubemail/plugins/carddav"
   chown -R www-data:www-data "$WWWDIR/roundcubemail/logs"
   chown -R www-data:www-data "$WWWDIR/roundcubemail/temp"
 }
 
 roundcube_create_db() {
-  require db setup
-  require settings
   settings prompt ROUNDCUBE_PASSWORD "" "Roundcube user database password"
 
   db add roundcubemail "$ROUNDCUBE_PASSWORD"
@@ -133,7 +118,6 @@ roundcube_create_db() {
 }
 
 roundcube_conf() {
-  require hostconf setup
   cat <<EOF
 <?php
 \$config = array();

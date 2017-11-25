@@ -28,8 +28,12 @@ LICENSE
 ###############################################################################
 
 
+unisonsync_requires() {
+  echo settings
+  echo sshlink
+}
+
 unisonsync_setup() {
-  require settings
   syspackage unison unison
   settings prompt_path UNISON "/var/lib/unison" "Enter the UNISON base directory:"
   unisonsync common_profile > "$UNISON/_common.prf"
@@ -38,7 +42,6 @@ unisonsync_setup() {
 
 unisonsync__remotesetup() {
   # Setup a remote host to make sure that it is unison compatible
-  require sshlink
   sshlink add "$host"
   if ! sshlink exec "$host" which unison &>/dev/null; then
     if ! sshlink exec "$host" apt install unison; then
@@ -53,7 +56,6 @@ unisonsync_settings() {
 }
 
 unisonsync_clean() {
-  require settings
   require crontask
 
   unset UNISON
@@ -72,7 +74,6 @@ unisonsync_add() {
     unisonsync setup
   fi
 
-  require sshlink
   sshlink add "$host"
 
   cat > "$UNISON/$(unisonsync profilename "$host" "$remotepath" "$period").prf" << EOF
@@ -125,15 +126,8 @@ unisonsync_del() {
   fi
 }
 
-unisonsync_enabled() {
-  if [ "$UNISON" ]; then
-    return 0
-  fi
-  return 1
-}
-
 unisonsync_ready() {
-  if [ "$UNISON" ] && unisonsync enabled && [ -e "$UNISON/_common.prf" ] && which unison &>/dev/null; then
+  if [ "$UNISON" ] && [ -e "$UNISON/_common.prf" ] && which unison &>/dev/null; then
     return 0
   fi
   return 1

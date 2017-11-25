@@ -31,7 +31,7 @@ set -e
 
 # Defaults
 SC="sc"
-SCVERSION=1005 # Version number (major * 1000 + minor)
+SCVERSION=1006 # Version number (major * 1000 + minor)
 SCROOTDIR=""
 SCPREFIX="$SCROOTDIR/usr/local"
 SCLIBDIR="$SCPREFIX/lib/$SC"
@@ -71,6 +71,90 @@ TRAPS=""
 
 ### Global functions ###
 
+listhas() {
+  local list="$1"; shift
+  local elt="$1"; shift
+
+  [[ " ${!list} " == *" $elt "* ]]
+}
+
+listadd() {
+  local list="$1"; shift
+
+  for elt in "$@"; do
+    if ! [ "$elt" ]; then continue; fi
+    if ! listhas "$list" "$elt"; then
+      eval "$list"="'$elt ${!list}'"
+    fi
+  done
+}
+
+listappend() {
+  local list="$1"; shift
+
+  for elt in "$@"; do
+    if ! [ "$elt" ]; then continue; fi
+    if ! listhas "$list" "$elt"; then
+      eval "$list"="'${!list} $elt'"
+    fi
+  done
+}
+
+listdel() {
+  local list="$1"; shift
+
+  for elt in "$@"; do
+    if ! [ "$elt" ]; then continue; fi
+    eval "$list"="'$(sed "s/ $elt //" <<< " ${!list} ")'"
+    eval "$list"="'${!list# }'"
+    eval "$list"="'${!list% }'"
+  done
+}
+
+# Returns true if the first parameter is equal to any other parameter
+# example:
+#  contains standby master standby client
+#  Returns true
+contains() {
+  local value="$1"; shift
+  for pattern in "$@"; do
+    if [ "$value" = "$pattern" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Tell if a variable is a defined boolean (1 or 0)
+isbool() {
+  local varname="$1"; shift
+  if [ "${!varname}" = "1" ] || [ "${!varname}" = "0" ]; then
+    return 0
+  fi
+  return 1
+}
+
+# Returns true if a variable is a boolean with a true value.
+# Remember that shell uses inverted logic so 1 is false and 0 is true
+getbool() {
+  local varname="$1"; shift
+  return ${!varname}
+}
+
+# Tell if a submodule supports a function
+cancall() {
+  local mod="$1"; shift
+  local sub="$1"; shift
+  if ! listhas SCMODULES "$mod"; then
+    echo "Error: $mod not loaded"
+    exit 2
+  fi
+  if [ "$(type -t "${mod}_$sub")" = "function" ]; then
+    return 0
+  fi
+  return 1
+}
+
 # Call a submodule
 subcall() {
   local mod="$1"; shift
@@ -78,22 +162,12 @@ subcall() {
   if [ "${sub:0:1}" = "_" ]; then
     echo "Cannot call $mod $sub: private function"
   fi
-  if [ "$(type -t "${mod}_$sub")" = "function" ]; then
+  if cancall "$mod" "$sub"; then
     "${mod}_$sub" "$@"
   else
-    echo "Cannot find $SC $mod $sub"
+    echo "Error: Cannot find $SC $mod $sub"
     exit 1
   fi
-}
-
-# Tell if a submodule supports a function
-cancall() {
-  local mod="$1"; shift
-  local sub="$1"; shift
-  if [ "$(type -t "${mod}_$sub")" = "function" ]; then
-    return 0
-  fi
-  return 1
 }
 
 # Import a common module
@@ -101,58 +175,35 @@ require() {
   local mod="$1"; shift
   local setup="$1"; shift || true
 
-  if [[ " $SCMODULES " != *" $mod "* ]]; then
+  if ! listhas SCMODULES "$mod"; then
     if [ -r "$SCLIBDIR/$mod" ]; then
       source "$SCLIBDIR/$mod"
     else
-      echo "Required module $mod not found"
+      echo "Error: Required module $mod not found"
       exit 2
     fi
+
     # Add the main entry point
     eval "$mod() { subcall $mod \"\$@\"; }"
-    SCMODULES="$SCMODULES $mod"
+    listadd SCMODULES "$mod"
+
+    if cancall "$mod" requires; then
+      for dep in $("$mod" requires); do
+        require "$dep" "$setup"
+      done
+    fi
   fi
 
   if [ "$setup" = setup ]; then
-    if [ "$(type -t "${mod}_ready")" = "function" ] && [ "$(type -t "${mod}_setup")" = "function" ] && ! "$mod" ready; then
+    if cancall "$mod" setup && cancall "$mod" ready && ! "$mod" ready; then
       "$mod" setup
     fi
   elif [ "$setup" = ready ]; then
-    if [ "$(type -t "${mod}_ready")" = "function" ] && ! "$mod" ready; then
-      echo "Module $mod found but not set up"
-      return 1
+    if cancall "$mod" ready && ! "$mod" ready; then
+      echo "Error: Module $mod found but not set up"
+      exit 1
     fi
   fi
-}
-
-# Import an optional module
-has() {
-  local mod="$1"; shift
-
-  if [[ " $SCMODULES " == *" $mod "* ]]; then
-    # Already loaded
-    true
-  elif [ -r "$SCLIBDIR/$mod" ]; then
-    source "$SCLIBDIR/$mod"
-    # Add the main entry point
-    eval "$mod() { subcall $mod \"\$@\"; }"
-  else
-    return 2
-  fi
-  SCMODULES="$SCMODULES $mod"
-  if [ "$(type -t "${mod}_enabled")" = "function" ]; then
-    if ! "${mod}_enabled"; then
-      # The module does not want to exist !
-      return 1
-    fi
-  fi
-  if [ "$(type -t "${mod}_ready")" = "function" ]; then
-    if ! "${mod}_ready"; then
-      # The module is not set up !
-      return 1
-    fi
-  fi
-  return 0
 }
 
 # Reload all loaded modules from files
@@ -176,18 +227,66 @@ upgrade_modules() {
   done
 }
 
-# Call a method on all commands matching filter
-broadcall() {
-  local function="$1"; shift
+# Get the list of modules, with correct dependency order
+modlist() {
+  local mlist=""
 
   for f in "$SCLIBDIR"/*; do
     local mod="$(basename "$f")"
-    source "$f"
-    # Add the main entry point
-    eval "$mod() { subcall $mod \"\$@\"; }"
-    if [ "$(type -t "${mod}_$function")" = "function" ]; then
-      "$mod" "$function" "$@"
-    fi
+    listappend mlist $(moddeps "$mod") "$mod"
+  done
+  echo $mlist
+}
+
+# Return the list of dependencies for a module,
+# either direct or indirect, in correct dependency order
+moddeps() {
+  local mod="$1"; shift
+  require "$mod"
+  local deps="$mod"
+  if cancall "$mod" requires; then
+    local ndeps=""
+    while [ "$deps" != "$ndeps" ]; do
+      ndeps="$deps"
+      for d in $deps; do
+        if cancall "$d" requires; then
+          listadd deps $("$d" requires)
+        fi
+      done
+    done
+    listappend mlist $deps
+  fi
+  deps="${deps% $mod}"
+  echo $deps
+}
+
+# Call a method for all modules
+broadcall() {
+  local function="$1"; shift
+
+  for mod in $(modlist); do
+    require "$mod"
+    "$mod" "$function" "$@"
+  done
+}
+
+# Call a method on dependencies of a module
+depcall() {
+  local mod="$1"; shift
+
+  require "$mod"
+  for d in $(moddeps "$mod"); do
+    "$d" "$@"
+  done
+}
+
+# Setup all dependencies of a module
+depsetup() {
+  local mod="$1"; shift
+
+  require "$mod"
+  for d in $(moddeps "$mod"); do
+    require "$d" setup
   done
 }
 
@@ -270,36 +369,6 @@ git_get() {
   fi
 }
 
-# Returns true if the first parameter is equal to any other parameter
-# example:
-#  contains standby master standby client
-#  Returns true
-contains() {
-  local value="$1"; shift
-  for pattern in "$@"; do
-    if [ "$value" = "$pattern" ]; then
-      return 0
-    fi
-  done
-  return 1
-}
-
-# Tell if a variable is a defined boolean (1 or 0)
-isbool() {
-  local varname="$1"; shift
-  if [ "${!varname}" = "1" ] || [ "${!varname}" = "0" ]; then
-    return 0
-  fi
-  return 1
-}
-
-# Returns true if a variable is a boolean with a true value.
-# Remember that shell uses inverted logic so 1 is false and 0 is true
-getbool() {
-  local varname="$1"; shift
-  return ${!varname}
-}
-
 # Install function
 install_sc() {
   # Install SC
@@ -316,6 +385,9 @@ install_sc() {
 
   # Run post install operations
   require settings
+  if ! [ -e "$SCSETTINGS" ]; then
+    SETTINGS_VERSION="$SCVERSION"
+  fi
   settings save
   echo "$SC installed"
 }

@@ -28,6 +28,10 @@ LICENSE
 ###############################################################################
 
 
+nginx_requires() {
+  echo ssl
+}
+
 nginx_setup() {
   systemctl stop apache2 || true
   syspackage nginx nginx

@@ -28,21 +28,21 @@ LICENSE
 ###############################################################################
 
 
+bluetooth_requires() {
+  echo boot
+}
+
 bluetooth_setup() {
   syspackage bluetooth bluetoothctl
-  require boot
   boot add bluetooth
 }
 
-bluetooth_ready() {
-  if ! bluetooth enabled || ! has boot || ! boot has bluetooth; then
-    return 1
-  fi
-  return 0
+bluetooth_cleanup() {
+  boot del bluetooth
 }
 
-bluetooth_enabled() {
-  if ! which bluetoothctl &>/dev/null; then
+bluetooth_ready() {
+  if ! which bluetoothctl &>/dev/null || ! boot has bluetooth; then
     return 1
   fi
   return 0

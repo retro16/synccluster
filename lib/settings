@@ -69,6 +69,9 @@ settings_print() {
 
 # Save settings
 settings_save() {
+  if ! [ "$SETTINGS_VERSION" ]; then
+    SETTINGS_VERSION="$SCVERSION"
+  fi
   local foreign_settings;
   if [ "$SCSETTINGS" ]; then
     if [ -r "$SCSETTINGS" ]; then
@@ -102,19 +105,77 @@ settings_get() {
   echo "${!name}"
 }
 
-settings_import() {
-  local m="$1"; shift
+settings_settings() {
+  echo SETTINGS_VERSION
+}
+
+settings_source_contains() {
+  local source="$1"; shift
+  local mod="$1"; shift
+
+  require "$mod"
+  if ! cancall "$mod" settings; then
+    # No settings
+    return 0
+  fi
+
+  for s in $("$mod" settings); do
+    if ! grep -E "^$s=" "$source"/"$SC" &>/dev/null; then
+      return 1
+    fi
+  done
+
+  return 0
+}
+
+settings_source_version() {
   local source="$1"; shift
 
-  require "$m"
-  if [ "$(type -t "${m}_settings")" = "function" ]; then
-    for s in $("${m}_settings"); do
-      if [ -r "$source"/sc ]; then
-        declare -g "$(grep -E "^$s=" "$source"/sc)";
+  if ! [ -e "$source"/"$SC" ]; then
+    echo "Error: $source does not contain the settings file"
+    exit 1
+  fi
+
+  local v="$(sed -n '/WWWDIR/s/[^=]*='\''\(.*\)'\''/\1/p' < "$source"/"$SC")"
+  if ! [ "$v" ]; then
+    v="$SCVERSION"
+  fi
+
+  echo "$v"
+}
+
+settings_import() {
+  local source="$1"; shift
+  local mod="$1"; shift
+
+  require "$mod"
+  if cancall "$mod" settings; then
+    for s in $("$mod" settings); do
+      if [ -r "$source"/"$SC" ]; then
+        declare -g "$(grep -E "^$s=" "$source"/"$SC")";
       fi
     done
   fi
   settings save
+}
+
+# Tells if all settings for a module are set
+settings_ready() {
+  local mod="$1"; shift
+
+  require "$mod"
+
+  if ! cancall "$mod" settings; then
+    return 0
+  fi
+
+  for s in $("$mod" settings); do
+    if ! [ "${!s+x}" ]; then
+      return 1
+    fi
+  done
+    
+  return 0
 }
 
 # Set a setting

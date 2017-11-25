@@ -28,13 +28,16 @@ LICENSE
 ###############################################################################
 
 
+sshshare_requires() {
+  echo sshlink
+}
+
 sshshare_add() {
   local host="$1"; shift
   local remote="$1"; shift
   local path="$1"; shift || path="$remote"
 
   require temp
-  require sshlink
 
   syspackage sshfs sshfs
 

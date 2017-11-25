@@ -28,8 +28,11 @@ LICENSE
 ###############################################################################
 
 
+mass_requires() {
+  echo settings
+}
+
 mass_setup() {
-  require settings
   settings prompt_path MASSDIR "/srv/mass" "Mass storage directory path"
 
   if ! has master || [ "$(master mode)" = "master" ]; then
@@ -104,18 +107,8 @@ mass_cleanup_sync() {
   settings save
 }
 
-mass_enabled() {
-  if [ "$MASSDIR" ] && [ -d "$MASSDIR" ] && isbool MASSBACKUP && [ "$MASSMODE" ]; then
-    return 0
-  fi
-  return 1
-}
-
 mass_ready() {
-  if mass enabled; then
-    return 0
-  fi
-  return 1
+  [ "$MASSDIR" ] && [ -d "$MASSDIR" ] && isbool MASSBACKUP && [ "$MASSMODE" ]
 }
 
 mass_files() {
@@ -124,12 +117,6 @@ mass_files() {
       echo "$MASSDIR"
     fi
   fi
-}
-
-mass_restore() {
-  local source="$1"; shift
-  require files
-  files restoremodule mass "$source"
 }
 
 mass_settings() {

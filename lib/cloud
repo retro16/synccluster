@@ -31,9 +31,16 @@ LICENSE
 cloud_version="12.0.3"
 cloud_url="https://download.nextcloud.com/server/releases/nextcloud-${cloud_version}.zip"
 
+cloud_requires() {
+  echo settings
+  echo user
+  echo mail # Uses imap as authentication server
+  echo www
+  echo db
+}
+
 cloud_setup() {
   require www setup
-  require settings
 
   settings prompt CLOUD_PASSWORD "" "Owncloud admin and database password"
   settings prompt_path CLOUDDIR "/srv/cloud" "Owncloud storage path"
@@ -53,9 +60,6 @@ cloud_setup() {
 }
 
 cloud_cleanup() {
-  require www
-  require db
-
   www delconf cloud
   rm -rf "$WWWDIR/cloud"
   db del cloud cloud
@@ -166,26 +170,12 @@ $CLOUDDIR
 EOF
 }
 
-cloud_restore() {
-  local source="$1"; shift
-  require db
-  require files
-  require settings
-
-  settings import cloud "$source"
-  require cloud setup
-  db restoremodule cloud "$source"
-  files restoremodule cloud "$source"
-  cloud occ upgrade
-}
-
 cloud_sync() {
   local host="$1"; shift
   local mode="$1"; shift
 
   if [ "$mode" != standby ]; then return 0; fi
 
-  require db
   db pull cloud "$host"
 
   require sshlink
@@ -196,7 +186,7 @@ cloud_sync() {
 }
 
 cloud_ready() {
-  if [ -d "$CLOUDDIR" ] && [ -e "$WWWDIR/cloud/config/config.php" ] && has db && db has cloud && has www && www hasconf cloud; then
+  if [ -d "$CLOUDDIR" ] && [ -e "$WWWDIR/cloud/config/config.php" ] && db has cloud && www hasconf cloud; then
     return 0
   fi
   return 1
@@ -210,5 +200,11 @@ cloud_settings() {
 cloud_upgrade_1005() {
   if cloud ready; then
     syspackage smbclient smbclient
+  fi
+}
+
+cloud_upgrade_1006() {
+  if cloud ready; then
+    cloud occ upgrade
   fi
 }

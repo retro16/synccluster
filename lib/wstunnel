@@ -28,15 +28,20 @@ LICENSE
 ###############################################################################
 
 
+wstunnel_requires() {
+  echo nginx
+  echo www
+  echo daemon
+  echo settings
+}
+
 wstunnel_setup() {
   require nginx setup
   syspackage nodejs-legacy node
   syspackage npm npm
   npm install -g wstunnel
-  require daemon
   daemon add wstunnel
 
-  require settings
   settings set WSTUNNEL_MODE server
   settings save
 }
@@ -50,18 +55,13 @@ wstunnel_client() {
   syspackage nodejs-legacy node
   syspackage npm npm
   npm install -g wstunnel
-  require daemon
   daemon add wstunnel
 
-  require settings
   settings set WSTUNNEL_MODE client
   settings save
 }
 
 wstunnel_cleanup() {
-  require daemon
-  require settings
-
   daemon del wstunnel
   settings del WSTUNNEL_MODE
   settings save

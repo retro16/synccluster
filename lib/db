@@ -28,9 +28,11 @@ LICENSE
 ###############################################################################
 
 
-db_setup() {
-  require settings
+db_requires() {
+  echo settings
+}
 
+db_setup() {
   syspackage postgresql pg_createcluster
   syspackage postgresql-contrib /usr/lib/postgresql/$PGVERSION/bin/pgdump
   syspackage postgresql-client psql
@@ -47,7 +49,6 @@ db_ready() {
 }
 
 db_cleanup() {
-  require settings
   unset PGVERSION
   settings save
 }

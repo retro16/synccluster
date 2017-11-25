@@ -33,7 +33,7 @@ scanner_setup() {
 
   if scanimage -L | grep -E "^device.*is a" &>/dev/null; then
     settings set SCANMODE local
-    settings prompt SCANOPT "--mode=Gray --lampoff-time=60 --warmup-time=2 --resolution 200 --calibration-cache=yes -x 215mm -y 297mm" "scanimage options"
+    settings prompt SCANOPT "--mode=Gray --resolution 200 --calibration-cache=yes -x 215mm -y 297mm" "scanimage options"
     settings prompt_path SCANDIR "/srv/scan" "Path to scanner"
 
     syspackage scanbd scanbd

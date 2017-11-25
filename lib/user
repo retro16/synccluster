@@ -27,7 +27,6 @@ SOFTWARE.
 LICENSE
 ###############################################################################
 
-
 user_setup() {
   syspackage sudo
   # Enable passwordless sudo
