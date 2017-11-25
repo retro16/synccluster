@@ -32,7 +32,7 @@ mail_requires() {
   echo ssl
   echo user
   echo settings
-  echo cron
+  echo crontask
   echo hostconf
 }
 
