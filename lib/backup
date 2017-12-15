@@ -122,20 +122,22 @@ backup_start() {
 
     # Backup host files
     sshlink sc "$host" broadcall files | sshlink getfiles "$host" "$BACKUP_DIR/$host/fs"
-    local dblist="$(sshlink sc "$host" broadcall db)"
 
-    # Backup host databases if any
-    if [ "$dblist" ]; then
-      require db
-      local db
-      local dbuser
-      local dbname
-      [ -d "$BACKUP_DIR/$host/db" ] || mkdir -p "$BACKUP_DIR/$host/db"
-      for db in $dblist; do
-        dbuser="${db%%:*}"
-        dbname="${db#*:}"
-        sshlink sc "$host" db backup "$dbuser" "$dbname" > "$BACKUP_DIR/$host/db/$db.xz"
-      done
+    # Backup host databases
+    if sshlink sc "$host" db ready; then
+      local dblist="$(sshlink sc "$host" broadcall_ready db)"
+      if [ "$dblist" ]; then
+        require db
+        local db
+        local dbuser
+        local dbname
+        [ -d "$BACKUP_DIR/$host/db" ] || mkdir -p "$BACKUP_DIR/$host/db"
+        for db in $dblist; do
+          dbuser="${db%%:*}"
+          dbname="${db#*:}"
+          sshlink sc "$host" db backup "$dbuser" "$dbname" > "$BACKUP_DIR/$host/db/$db.xz"
+        done
+      fi
     fi
   else
     # Backup a specific path on a foreign host

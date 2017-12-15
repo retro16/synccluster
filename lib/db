@@ -34,18 +34,11 @@ db_requires() {
 
 db_setup() {
   syspackage postgresql pg_createcluster
+  PGVERSION="$(pg_lsclusters | tail -1 | cut -d' ' -f1)"
   syspackage postgresql-contrib /usr/lib/postgresql/$PGVERSION/bin/pgdump
   syspackage postgresql-client psql
 
-  PGVERSION="$(pg_lsclusters | tail -1 | cut -d' ' -f1)"
   settings save
-}
-
-db_ready() {
-  if db enabled; then
-    return 0
-  fi
-  return 1
 }
 
 db_cleanup() {
@@ -57,6 +50,11 @@ db_cleanup() {
 db_backup() {
   local user="$1"; shift
   local database="$1"; shift || database="$user"
+
+  if ! db ready; then
+    return 0
+  fi
+
   syspackage xz-utils xz
   syspackage postgresql-client pg_dump pg_dumpall
   pushd / &>/dev/null
@@ -65,7 +63,7 @@ db_backup() {
   echo "DROP ROLE IF EXISTS $user;"
   su -c "pg_dumpall --roles-only | grep -P '^(?:CREATE|DROP|ALTER) ROLE $user' " postgres
   echo "CREATE DATABASE $database OWNER=$user;"
-  echo "\connect $database"
+  echo "\\connect $database"
   su -c "pg_dump --no-tablespaces $database" postgres
   ) | xz -c -8
   popd &>/dev/null
@@ -129,6 +127,10 @@ db_del() {
 db_has() {
   local database="$1"; shift
 
+  if ! db ready; then
+    return 1
+  fi
+
   local rv
   pushd / &>/dev/null
   rv="$(su -c "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='$database';\"" postgres)"
@@ -142,6 +144,10 @@ db_has() {
 }
 
 db_list() {
+  if ! db ready; then
+    return 0
+  fi
+
   pushd / &>/dev/null
   su -c "psql -tAc \"SELECT datname FROM pg_database;\"" postgres | grep -v -e template0 -e template1 -e postgres
   popd &>/dev/null
@@ -184,7 +190,7 @@ db_getpw() {
   su -c "pg_dumpall -r" postgres | grep "ALTER ROLE $user " | cut -d\' -f2
 }
 
-db_enabled() {
+db_ready() {
   if [ "$PGVERSION" ] && ls "/usr/lib/postgresql/$PGVERSION/bin/postgres" &>/dev/null && netstat -platun | grep -E ":5432.*LISTEN.*postgres" &>/dev/null; then
     return 0
   fi

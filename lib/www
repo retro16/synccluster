@@ -55,6 +55,7 @@ www_setup() {
   www configure_phpini /etc/php5/apache2/php.ini
 
   systemctl enable apache2
+  systemctl restart apache2
 
   WWWDIR=/var/www
   settings save
@@ -78,6 +79,7 @@ www_addconf() {
   local target="/etc/apache2/conf-available/${SC}_$conf.conf"
   cat > "$target"
   a2enconf "${SC}_$conf"
+  systemctl reload apache2
 }
 
 www_hasconf() {
@@ -89,7 +91,9 @@ www_hasconf() {
 }
 
 www_delconf() {
+  local conf="$1"; shift
   rm -f "/etc/apache2/conf-available/${SC}_$conf.conf" "/etc/apache2/conf-enabled/${SC}_$conf.conf"
+  systemctl reload apache2
 }
 
 www_configure_phpini() {

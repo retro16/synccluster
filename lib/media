@@ -45,7 +45,7 @@ media_setup() {
   syspackage kodi kodi
   syspackage speedcrunch speedcrunch
   syspackage awesome awesome
-  syspackage firefox-esr
+  syspackage firefox-esr firefox
   syspackage numlockx numlockx
   syspackage pavucontrol pavucontrol
   syspackage pulseaudio pulseaudio
@@ -67,6 +67,7 @@ media_setup() {
 
   # Install retroarch
   if getbool RETROARCH; then
+    settings set RETROARCHDIR "$KODIDIR/retroarch"
     media_setup_retroarch
   fi
 
@@ -98,10 +99,15 @@ media_setup_retroarch() {
   syspackage libgl1-mesa-dev /usr/include/GL/gl.h
   syspackage zlib1g-dev /usr/include/zlib.h
   syspackage libsdl2-dev /usr/include/SDL2/SDL.h
+  syspackage libxml2-dev /usr/bin/xml2-config
+  syspackage libusb-1.0-0-dev /usr/include/libusb-1.0/libusb.h
+  syspackage libfreetype6-dev /usr/bin/freetype-config
 
-  [ -d "$KODIDIR/retroarch/build" ] || mkdir -p "$KODIDIR/retroarch/build"
+  settings prompt_path RETROARCHDIR "$PWD/retroarch" "Retroarch directory"
+
+  [ -d "$RETROARCHDIR/build" ] || mkdir -p "$RETROARCHDIR/build"
   (
-    cd "$KODIDIR/retroarch/build"
+    cd "$RETROARCHDIR/build"
 
     # Fetch and install RetroArch frontend
     if [ -d RetroArch ]; then
@@ -113,7 +119,7 @@ media_setup_retroarch() {
     fi
 
     cd RetroArch
-    ./configure --prefix="$KODIDIR/retroarch"
+    ./configure --prefix="$RETROARCHDIR"
     make -j6
     make install
   )
@@ -183,7 +189,7 @@ myawesomemenu = {
 EOF
   if getbool RETROARCH; then
     cat <<EOF
-   { "Retroarch", "$KODIDIR/retroarch/bin/retroarch -f" },
+   { "Retroarch", "$RETROARCHDIR/bin/retroarch -f" },
 EOF
   fi
   cat <<EOF
@@ -204,7 +210,7 @@ globalkeys = awful.util.table.join(
     -- Standard program
     awful.key({ modkey,           }, "Return", function () awful.util.spawn(terminal) end),
     awful.key({ ""    ,           }, "XF86Explorer", function () awful.util.spawn(terminal) end),
-    awful.key({ ""    ,           }, "XF86Tools", function () awful.util.spawn('$KODIDIR/retroarch/bin/retroarch -f') end),
+    awful.key({ ""    ,           }, "XF86Tools", function () awful.util.spawn('$RETROARCHDIR/bin/retroarch -f') end),
     awful.key({ ""    ,           }, "XF86Search", function () awful.util.spawn('firefox http://duckduckgo.com') end),
     awful.key({ ""    ,           }, "XF86HomePage", function () awful.util.spawn('firefox') end),
     awful.key({ modkey, "Control" }, "r", awesome.restart)
@@ -282,15 +288,19 @@ EOF
 }
 
 media_files() {
-  if media ready; then
-    echo "/etc/lightdm/lightdm.conf"
-    echo "$KODIDIR"
+  echo "$KODIDIR/.config/awesome/rc.lua"
+  echo "$KODIDIR/.mozilla"
+  echo "$KODIDIR/.kodi/userdata"
+  echo "$KODIDIR/.kodi/addons"
+  if getbool RETROARCH; then
+    echo "$KODIDIR/.config/retroarch"
   fi
 }
 
 media_settings() {
   echo KODIDIR
   echo RETROARCH
+  echo RETROARCHDIR
 }
 
 media_restore() {
@@ -305,4 +315,8 @@ media_restore() {
   files restoremodule media "$source"
 
   systemctl restart lightdm
+}
+
+media_upgrade_1006() {
+  settings set RETROARCHDIR "$KODIDIR/retroarch"
 }

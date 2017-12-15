@@ -206,6 +206,10 @@ require() {
   fi
 }
 
+has() {
+  require "$@"
+}
+
 # Reload all loaded modules from files
 reload_modules() {
   local modlist="$SCMODULES"
@@ -266,7 +270,21 @@ broadcall() {
 
   for mod in $(modlist); do
     require "$mod"
-    "$mod" "$function" "$@"
+    if cancall "$mod" "$function"; then
+      "$mod" "$function" "$@"
+    fi
+  done
+}
+
+# Call a method for all ready modules
+broadcall_ready() {
+  local function="$1"; shift
+
+  for mod in $(modlist); do
+    require "$mod"
+    if ( ! cancall "$mod" ready || "$mod" ready ) && cancall "$mod" "$function"; then
+      "$mod" "$function" "$@"
+    fi
   done
 }
 
