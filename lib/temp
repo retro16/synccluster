@@ -33,35 +33,30 @@ LICENSE
 temp_dir() {
   local varname="$1"; shift || varname="TEMP_FILE"
   eval "$varname"="$(mktemp -d)"
-  TRAPS="$TRAPS"$'\n'"rm -rf '${!varname}';"
-  trap "$TRAPS" EXIT
+  trappush "rm -rf '${!varname}';"
 }
 
 temp_file() {
   local varname="$1"; shift || varname="TEMP_FILE"
   eval "$varname"="$(mktemp)"
-  TRAPS="$TRAPS"$'\n'"rm -rf '${!varname}';"
-  trap "$TRAPS" EXIT
+  trappush "rm -rf '${!varname}';"
 }
 
 temp_filename() {
   local varname="$1"; shift || varname="TEMP_FILE"
   eval "$varname"="$(mktemp -u)"
-  TRAPS="$(head -n -1 <<< "$TRAPS")"
-  trap "$TRAPS" EXIT
+  trappop
 }
 
 temp_release() {
   local varname="$1"; shift || varname="TEMP_FILE"
   rm -rf "${!varname}"
-  TRAPS="$(head -n -1 <<< "$TRAPS")"
-  trap "$TRAPS" EXIT
+  trappop
   unset "$varname"
 }
 
 temp_forget() {
   local varname="$1"; shift || varname="TEMP_FILE"
-  TRAPS="$(head -n -1 <<< "$TRAPS")"
-  trap "$TRAPS" EXIT
+  trappop
   unset "$varname"
 }

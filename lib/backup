@@ -163,6 +163,20 @@ backup_contains() {
 backup_restorefrom() {
   local source="$1"; shift
 
+  local remote=""
+  if [ "${source%%:*}" != "$source" ]; then
+    # Remote source. Mount using sshfs.
+
+    require temp
+    syspackage sshfs sshfs
+    temp dir backupmnt
+    sshfs "$source" "$backupmnt"
+    trappush "umount '$backupmnt'"
+
+    source="$backupmnt"
+    remote="TRUE"
+  fi
+
   require settings
   local source_version="$(settings source_version "$source")"
 
@@ -180,6 +194,12 @@ backup_restorefrom() {
   upgrade_modules "$source_version" "$SCVERSION"
   SETTING_VERSION="$SCVERSION"
   settings save
+
+  if [ "$remote" ]; then
+    umount backupmnt
+    trappop
+    temp release backupmnt
+  fi
 }
 
 backup_restoremodule() {

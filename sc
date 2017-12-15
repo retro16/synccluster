@@ -69,6 +69,17 @@ PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 SCMODULES=""
 TRAPS=""
 
+trappush() {
+  local cmd="$1"; shift
+  TRAPS="$TRAPS"$'\n'"$cmd"
+  trap "$TRAPS" EXIT
+}
+
+trappop() {
+  TRAPS="$(head -n -1 <<< "$TRAPS")"
+  trap "$TRAPS" EXIT
+}
+
 ### Global functions ###
 
 listhas() {
