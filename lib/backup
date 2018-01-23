@@ -216,6 +216,9 @@ backup_restoremodule() {
   if cancall "$mod" restore; then
     "$mod" restore "$source" "$source_version"
   else
+    require settings
+    require files
+    require db
     require "$mod" setup
     settings import "$source" "$mod"
     files restoremodule "$mod" "$source"
