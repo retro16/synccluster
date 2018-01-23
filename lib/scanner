@@ -150,10 +150,3 @@ scanner_files() {
     fi
   fi
 }
-
-scanner_upgrade_1004() {
-  if scanner ready && [ "$SCANMODE" = local ]; then
-    require daemon
-    daemon add scanner
-  fi
-}

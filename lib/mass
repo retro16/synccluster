@@ -125,12 +125,6 @@ mass_settings() {
   echo MASSMODE
 }
 
-mass_upgrade_1003() {
-  require settings
-  settings set MASSBACKUP 1
-  settings save
-}
-
 mass_upgrade_1005() {
   require settings
   if has master && [ "$(master mode)" != "master" ]; then

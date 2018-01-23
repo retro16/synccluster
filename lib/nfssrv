@@ -53,9 +53,3 @@ nfssrv_ready() {
   fi
   return 1
 }
-
-nfssrv_upgrade_1003() {
-  if nfssrv enabled; then
-    nfssrv setup
-  fi
-}

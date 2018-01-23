@@ -48,6 +48,7 @@ mail_setup() {
   settings prompt_path MAILDIR "/var/mail" "Enter mail directory:"
   settings prompt SPAMMAILDIR "Junk" "Name of the SPAM mail directory:"
   settings prompt HAMMAILDIR "Good" "Name of the HAM mail directory (email known as good):"
+  settings prompt RELAYHOST "" "Email relay host (leave blank to send directly):"
 
   chmod 1777 "$MAILDIR"
 
@@ -121,6 +122,11 @@ smtpd_tls_key_file = $SSLKEY
 smtpd_tls_session_cache_database = btree:\${data_directory}/smtpd_scache
 smtpd_use_tls = yes
 EOF
+  if [ "$RELAYHOST" ]; then
+    cat <<EOF
+relayhost = $RELAYHOST
+EOF
+  fi
 }
 
 mail_procmail_conf() {
@@ -175,6 +181,19 @@ ssl_cipher_list = ALL:!LOW:!SSLv2:ALL:!aNULL:!ADH:!eNULL:!EXP:RC4+RSA:+HIGH:+MED
 EOF
 }
 
+mail_setfqdn() {
+  local fqdn="$1"; shift
+  if mail ready; then
+    echo "$fqdn" > /etc/mailname
+    mail postfix_conf > "/etc/postfix/main.cf"
+    mail procmail_conf > "/etc/procmailrc"
+    mail dovecot_conf > "/etc/dovecot/dovecot.conf"
+
+    systemctl restart dovecot
+    systemctl restart postfix
+  fi
+}
+
 mail_cron() {
   local period="$1"; shift
 
@@ -199,7 +218,6 @@ mail_sync() {
 
   require sshlink
   sshlink getfiles "$host" <<EOF
-/etc/postfix/main.cf
 /etc/aliases
 /etc/procmailrc
 /etc/dovecot/dovecot.conf
@@ -227,10 +245,12 @@ mail_settings() {
   echo MAILDIR
   echo SPAMMAILDIR
   echo HAMMAILDIR
+  echo RELAYHOST
 }
 
-mail_upgrade_1005() {
-  if mail ready; then
-    mail procmail_conf > "/etc/procmailrc"
-  fi
+mail_upgrade_1006() {
+  require settings
+  settings prompt RELAYHOST "" "Email relay host (leave blank to send directly):"
+  mail postfix_conf > "/etc/postfix/main.cf"
+  settings save
 }

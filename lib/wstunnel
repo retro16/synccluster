@@ -85,11 +85,3 @@ wstunnel_daemon() {
 wstunnel_settings() {
   echo WSTUNNEL_MODE
 }
-
-wstunnel_upgrade_1005() {
-  if wstunnel ready; then
-    require settings
-    settings set WSTUNNEL_MODE server
-    settings save
-  fi
-}

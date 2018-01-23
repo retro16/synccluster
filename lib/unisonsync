@@ -229,9 +229,3 @@ ignore = Path .gstreamer-*
 ignore = Path .cache
 EOF
 }
-
-unisonsync_upgrade_1002() {
-  if unisonsync ready; then
-    unisonsync common_profile > "$UNISON/_common.prf"
-  fi
-}

@@ -466,19 +466,3 @@ master_settings() {
   echo MASTER
   echo MASTER_MODE
 }
-
-master_upgrade_1003() {
-  if [ "$MASTER_MODE" = standby && "$MASSDIR" ]; then
-    if has sshshare && sshshare has "$MASTER" "$MASSDIR"; then
-      if has nfssrv && nfssrv ready; then
-        systemctl stop nfs-kernel-server
-      fi
-      sshshare del "$MASTER" "$MASSDIR"
-      require nfsclient
-      nfsclient add "$MASTER" "$MASSDIR" "$MASSDIR" cache
-      if has nfssrv && nfssrv ready; then
-        systemctl start nfs-kernel-server
-      fi
-    fi
-  fi
-}

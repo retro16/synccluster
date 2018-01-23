@@ -155,9 +155,13 @@ backup_contains() {
   require db
 
   require "$mod"
-  settings source_contains "$source" "$mod" \
-  && files source_contains "$source" "$mod" \
-  && db source_contains "$source" "$mod"
+  if cancall "$mod" source_contains; then
+    "$mod" source_contains "$source"
+  else
+    settings source_contains "$source" "$mod" \
+    && files source_contains "$source" "$mod" \
+    && db source_contains "$source" "$mod"
+  fi
 }
 
 backup_restorefrom() {
@@ -168,6 +172,8 @@ backup_restorefrom() {
     # Remote source. Mount using sshfs.
 
     require temp
+    require sshlink
+    sshlink add "${source%%:*}"
     syspackage sshfs sshfs
     temp dir backupmnt
     sshfs "$source" "$backupmnt"

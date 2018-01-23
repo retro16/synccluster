@@ -36,21 +36,23 @@ hostconf_setup() {
 }
 
 hostconf_host() {
-  hostname
+  [ "$FQDN" ] || hostconf setup
+  echo "${FQDN%%.*}"
 }
 
 hostconf_domain() {
-  dnsdomainname
+  [ "$FQDN" ] || hostconf setup
+  echo "${FQDN#*.}"
 }
 
 hostconf_fqdn() {
-  hostname -f
+  [ "$FQDN" ] || hostconf setup
+  echo "$FQDN"
 }
 
 hostconf_setfqdn() {
   local fqdn="$1"; shift
   echo "$fqdn" > /etc/hostname
-  echo "$fqdn" > /etc/mailname
   sed -i "s/127\.0\.1\.1 .*/127.0.1.1 $fqdn ${fqdn%%.*}/" /etc/hosts
 }
 

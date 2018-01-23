@@ -28,7 +28,7 @@ LICENSE
 ###############################################################################
 
 
-cloud_version="12.0.3"
+cloud_version="12.0.4"
 cloud_url="https://download.nextcloud.com/server/releases/nextcloud-${cloud_version}.zip"
 
 cloud_requires() {
