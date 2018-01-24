@@ -102,6 +102,18 @@ db_restoremodule() {
   done
 }
 
+db_source_contains() {
+  local source="$1"; shift
+  local mod="$1"; shift
+
+  require "$mod"
+  if ! cancall "$mod" db; then
+    return 1
+  fi
+
+  [ -r "$source/db/$("$mod" db).xz" ]
+}
+
 db_add() {
   local user="$1"; shift
   local password="$1"; shift
