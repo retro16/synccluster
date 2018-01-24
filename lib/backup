@@ -186,13 +186,13 @@ backup_restorefrom() {
   require settings
   local source_version="$(settings source_version "$source")"
 
-  if [ -e "$source/$SC" ]; then
-    syspackage dialog dialog
-    if dialog --yesno "Restore all SC settings ? This will overwrite $SCSETTINGS" 0 0; then
-      cp "$source/$SC" "$SCSETTINGS"
-      source "$SCSETTINGS"
-    fi
-  fi
+#  if [ -e "$source/$SC" ]; then
+#    syspackage dialog dialog
+#    if dialog --yesno "Restore all SC settings ? This will overwrite $SCSETTINGS" 0 0; then
+#      cp "$source/$SC" "$SCSETTINGS"
+#      source "$SCSETTINGS"
+#    fi
+#  fi
 
   for mod in $(modlist); do
     backup restoremodule "$mod" "$source"
