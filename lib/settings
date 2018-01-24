@@ -151,7 +151,7 @@ settings_import() {
   require "$mod"
   if cancall "$mod" settings; then
     for s in $("$mod" settings); do
-      if [ -r "$source"/"$SC" ]; then
+      if [ -r "$source"/"$SC" ] && grep -E "^$s=" "$source"/"$SC" &>/dev/null; then
         declare -g "$(grep -E "^$s=" "$source"/"$SC")";
       fi
     done
