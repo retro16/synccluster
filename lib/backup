@@ -212,10 +212,14 @@ backup_restoremodule() {
   local mod="$1"; shift
   local source="$1"; shift
 
-  require "$mod"
+  if ! backup contains "$source" "$mod"; then
+    return 0
+  fi
+
+  require "$mod" setup
   if cancall "$mod" restore; then
     "$mod" restore "$source" "$source_version"
-  elif has "$mod" && "$mod" ready; then
+  else
     require settings
     require files
     require db
@@ -223,16 +227,6 @@ backup_restoremodule() {
     files restoremodule "$mod" "$source"
     db restoremodule "$mod" "$source"
   fi
-}
-
-backup__restore_files() {
-  local mod="$1"; shift
-  local source="$1"; shift
-}
-
-backup__restore_db() {
-  local mod="$1"; shift
-  local source="$1"; shift
 }
 
 backup_enabled() {
