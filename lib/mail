@@ -38,6 +38,7 @@ mail_requires() {
 
 mail_setup() {
   require ssl setup
+  require hostconf setup
 
   syspackage postfix postfix
   syspackage dovecot-imapd doveadm
@@ -93,6 +94,7 @@ mail_files() {
 
 mail_postfix_conf() {
   require hostconf setup
+  require ssl setup
   cat <<EOF
 alias_database = hash:/etc/aliases
 alias_maps = hash:/etc/aliases

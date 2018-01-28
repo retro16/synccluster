@@ -115,7 +115,6 @@ EOF
 
 www_configure_apacheredirect() {
   local target="$1"; shift
-  require hostconf
   cat > "$target" <<EOF
 <VirtualHost *:8080>
     ServerAdmin webmaster@localhost

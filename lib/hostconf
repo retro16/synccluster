@@ -32,17 +32,15 @@ hostconf_setup() {
   require settings
 
   settings prompt FQDN "$(hostname -f)" "Enter host and domain name (host.example.com)"
-  broadcall setfqdn "$FQDN"
   settings save
+  broadcall setfqdn "$FQDN"
 }
 
 hostconf_host() {
-  [ "$FQDN" ] || hostconf setup
   echo "${FQDN%%.*}"
 }
 
 hostconf_domain() {
-  [ "$FQDN" ] || hostconf setup
   echo "${FQDN#*.}"
 }
 
@@ -51,7 +49,6 @@ hostconf_restore() {
 }
 
 hostconf_fqdn() {
-  [ "$FQDN" ] || hostconf setup
   echo "$FQDN"
 }
 

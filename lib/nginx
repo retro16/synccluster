@@ -30,12 +30,14 @@ LICENSE
 
 nginx_requires() {
   echo ssl
+  echo hostconf
 }
 
 nginx_setup() {
   systemctl stop apache2 || true
   syspackage nginx nginx
   require ssl setup
+  require hostconf setup
   nginx proxy_conf > /etc/nginx/sites-available/proxy
   rm /etc/nginx/sites-enabled/*
   ln -s ../sites-available/proxy /etc/nginx/sites-enabled/proxy
@@ -55,12 +57,17 @@ nginx_ready() {
   return 1
 }
 
+nginx_setfqdn() {
+  nginx proxy_conf > /etc/nginx/sites-available/proxy
+  systemctl reload nginx
+}
+
 nginx_proxy_conf() {
 cat <<EOF
 server {
   listen 80 default_server;
   server_name coulon-jm.fr;
-  return 301 https://coulon-jm.fr\$request_uri;
+  return 301 https://$(hostconf domain)\$request_uri;
 }
 
 server {
