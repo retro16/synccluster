@@ -206,9 +206,7 @@ backup_restorefrom() {
   settings save
 
   if [ "$remote" ]; then
-    umount "$backupmnt"
-    trappop
-    temp release backupmnt
+    umount "$backupmnt" && trappop && temp release backupmnt
   fi
 }
 
