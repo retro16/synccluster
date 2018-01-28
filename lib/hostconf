@@ -33,6 +33,7 @@ hostconf_setup() {
 
   settings prompt FQDN "$(hostname -f)" "Enter host and domain name (host.example.com)"
   broadcall setfqdn "$FQDN"
+  settings save
 }
 
 hostconf_host() {
