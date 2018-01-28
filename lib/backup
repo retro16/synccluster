@@ -195,6 +195,7 @@ backup_restorefrom() {
 #  fi
 
   for mod in $(modlist); do
+    require "$mod"
     if cancall "$mod" restore; then
       "$mod" restore "$source" "$source_version"
     elif ! backup contains "$source" "$mod"; then
