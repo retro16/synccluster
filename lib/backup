@@ -197,7 +197,7 @@ backup_restorefrom() {
   for mod in $(modlist); do
     if cancall "$mod" restore; then
       "$mod" restore "$source" "$source_version"
-    elif ! backup contains "$source" "$mod"
+    elif ! backup contains "$source" "$mod"; then
       backup restoremodule "$mod" "$source"
     fi
   done
