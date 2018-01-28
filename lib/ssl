@@ -48,6 +48,16 @@ ssl_setup() {
   settings save
 }
 
+ssl_restore() {
+  local source="$1"; shift
+  local source_version="$1"; shift
+
+  require settings
+  require files
+  settings import "$source" "$mod"
+  files restoremodule "$mod" "$source"
+}
+
 ssl_cleanup() {
   require settings
   unset SSLCERT

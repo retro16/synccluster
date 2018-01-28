@@ -147,12 +147,13 @@ settings_source_version() {
 settings_import() {
   local source="$1"; shift
   local mod="$1"; shift
+  local prefix="$1"; shift || prefix=""
 
   require "$mod"
   if cancall "$mod" settings; then
     for s in $("$mod" settings); do
       if [ -r "$source"/"$SC" ] && grep -E "^$s=" "$source"/"$SC" &>/dev/null; then
-        declare -g "$(grep -E "^$s=" "$source"/"$SC")";
+        declare -g "$prefix$(grep -E "^$s=" "$source"/"$SC")";
       fi
     done
   fi

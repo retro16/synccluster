@@ -195,7 +195,11 @@ backup_restorefrom() {
 #  fi
 
   for mod in $(modlist); do
-    backup restoremodule "$mod" "$source"
+    if cancall "$mod" restore; then
+      "$mod" restore "$source" "$source_version"
+    elif ! backup contains "$source" "$mod"
+      backup restoremodule "$mod" "$source"
+    fi
   done
   upgrade_modules "$source_version" "$SCVERSION"
   SETTING_VERSION="$SCVERSION"
@@ -212,21 +216,13 @@ backup_restoremodule() {
   local mod="$1"; shift
   local source="$1"; shift
 
-  if ! backup contains "$source" "$mod"; then
-    return 0
-  fi
-
+  require settings
+  require files
+  require db
+  settings import "$source" "$mod"
   require "$mod" setup
-  if cancall "$mod" restore; then
-    "$mod" restore "$source" "$source_version"
-  else
-    require settings
-    require files
-    require db
-    settings import "$source" "$mod"
-    files restoremodule "$mod" "$source"
-    db restoremodule "$mod" "$source"
-  fi
+  files restoremodule "$mod" "$source"
+  db restoremodule "$mod" "$source"
 }
 
 backup_enabled() {
