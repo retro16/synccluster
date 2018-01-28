@@ -153,7 +153,8 @@ settings_import() {
   if cancall "$mod" settings; then
     for s in $("$mod" settings); do
       if [ -r "$source"/"$SC" ] && grep -E "^$s=" "$source"/"$SC" &>/dev/null; then
-        declare -g "$prefix"$(grep -E "^$s=" "$source"/"$SC");
+        declare -g "$prefix$s"
+        eval "$prefix$(grep -E "^$s=" "$source"/"$SC")";
       fi
     done
   fi
