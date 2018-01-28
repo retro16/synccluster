@@ -31,7 +31,7 @@ LICENSE
 hostconf_setup() {
   require settings
 
-  settings prompt FQDN "$(hostconf fqdn)" "Enter host and domain name (host.example.com)"
+  settings prompt FQDN "$(hostname -f)" "Enter host and domain name (host.example.com)"
   broadcall setfqdn "$FQDN"
 }
 
