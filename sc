@@ -71,12 +71,12 @@ TRAPS=""
 
 trappush() {
   local cmd="$1"; shift
-  TRAPS="$TRAPS"$'\n'"$cmd"
+  TRAPS="$cmd"$'\n'"$TRAPS"
   trap "$TRAPS" EXIT
 }
 
 trappop() {
-  TRAPS="$(head -n -1 <<< "$TRAPS")"
+  TRAPS="$(tail -n +1 <<< "$TRAPS")"
   trap "$TRAPS" EXIT
 }
 
