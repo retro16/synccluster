@@ -52,7 +52,7 @@ www_setup() {
 
   www configure_apacheredirect /etc/apache2/sites-available/000-default.conf
   www configure_ports /etc/apache2/ports.conf
-  www configure_phpini /etc/php5/apache2/php.ini
+  www configure_phpini /etc/php/7.0/apache2/php.ini
 
   systemctl enable apache2
   systemctl restart apache2
