@@ -37,14 +37,14 @@ www_setup() {
   require nginx setup
 
   syspackage apache2 apache2ctl
-  syspackage libapache2-mod-php5 /usr/lib/apache2/modules/libphp5.so
-  syspackage php5-cli php5
-  syspackage php5-apcu /etc/php5/mods-available/apcu.ini
-  syspackage php5-curl /usr/share/php5/curl/curl.ini
-  syspackage php5-fpm /usr/sbin/php5-fpm
-  syspackage php5-gd /usr/share/php5/gd/gd.ini
-  syspackage php5-imap /usr/share/php5/imap/imap.ini
-  syspackage php5-pgsql /usr/share/php5/pgsql/pgsql.ini
+  syspackage libapache2-mod-php /usr/lib/apache2/modules/libphp*.so
+  syspackage php-cli php
+  syspackage php-apcu /etc/php/*/mods-available/apcu.ini
+  syspackage php-curl /usr/share/php*/curl/curl.ini
+  syspackage php-fpm /usr/sbin/php-fpm*
+  syspackage php-gd /usr/share/php*/gd/gd.ini
+  syspackage php-imap /usr/share/php*/imap/imap.ini
+  syspackage php-pgsql /usr/share/php*/pgsql/pgsql.ini
 
   a2enmod proxy
   a2enmod proxy_http
@@ -62,7 +62,7 @@ www_setup() {
 }
 
 www_files() {
-  echo /etc/php5/apache2/php.ini
+  echo /etc/php/7.0/apache2/php.ini
   echo "$WWWDIR/html"
 }
 
@@ -103,7 +103,6 @@ www_configure_phpini() {
   sed -i 's/[ ;]*post_max_size *= .*/post_max_size = 256M/' "$target"
   sed -i 's/[ ;]*upload_max_filesize *= .*/upload_max_filesize = 2048M/' "$target"
   sed -i 's/[ ;]*date.timezone *= .*/date.timezone = Europe\/Paris/' "$target"
-  sed -i 's/[ ;]*upload_max_filesize *= .*/upload_max_filesize = 2048M/' "$target"
 }
 
 www_configure_ports() {
