@@ -95,11 +95,6 @@ ssl_sync() {
   ssl files | sshlink getfiles "$host"
 }
 
-ssl_restore() {
-  local source="$1"; shift
-  files restoremodule ssl "$source"
-}
-
 ssl_files() {
   echo "$SSLCERT"
   echo "$SSLKEY"
