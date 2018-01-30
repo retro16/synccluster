@@ -51,6 +51,23 @@ unisonsync__remotesetup() {
   fi
 }
 
+unisonsync_restore() {
+  local source="'$1"; shift
+
+  syspackage unison unison
+  require settings
+  require sshlink
+  settings import "$source" unisonsync
+  settings save
+  [ -d "$UNISON" ] || mkdir -p
+  unisonsync common_profile > "$UNISON/_common.prf"
+
+  for f in "$UNISON"/*:*.prf; do
+    local host="$(basename "$f" | cut -d: -f2)"
+    sshlink add "$host"
+  done
+}
+
 unisonsync_settings() {
   echo UNISON
 }
@@ -111,7 +128,7 @@ unisonsync_profilename() {
   local remotepath="$1"; shift
   local period="$1"; shift || period=""
 
-  echo "${period}:${host}$(tr -c '[a-zA-Z0-9]' '_' <<< "$remotepath")"
+  echo "${period}:${host}:$(tr -c '[a-zA-Z0-9]' '_' <<< "$remotepath")"
 }
 
 unisonsync_del() {

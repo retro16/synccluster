@@ -286,3 +286,8 @@ sshlink_delspeed() {
 sshlink_settings() {
   echo SSHLINK_SPEEDLIMITS
 }
+
+sshlink_files() {
+  echo "$HOME/.ssh/id_rsa"
+}
+
