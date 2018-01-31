@@ -84,10 +84,7 @@ mail_ready() {
 }
 
 mail_files() {
-  echo "/etc/postfix/main.cf"
   echo "/etc/aliases"
-  echo "/etc/procmailrc"
-  echo "/etc/dovecot/dovecot.conf"
   echo "/var/lib/spamassassin"
   echo "$MAILDIR"
 }
@@ -221,8 +218,6 @@ mail_sync() {
   require sshlink
   sshlink getfiles "$host" <<EOF
 /etc/aliases
-/etc/procmailrc
-/etc/dovecot/dovecot.conf
 /var/lib/spamassassin
 EOF
 
