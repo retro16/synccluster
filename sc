@@ -269,9 +269,9 @@ moddeps() {
         fi
       done
     done
-    listappend mlist $deps
   fi
-  deps="${deps% $mod}"
+  deps="${deps%$mod}"
+  deps="${deps% }"
   echo $deps
 }
 
