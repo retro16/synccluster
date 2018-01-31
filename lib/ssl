@@ -96,8 +96,12 @@ ssl_sync() {
 }
 
 ssl_files() {
-  echo "$SSLCERT"
-  echo "$SSLKEY"
+  if [ "${SSLCERT#/etc/letsencrypt/}" != "$SSLCERT" ] && [ "${SSLKEY#/etc/letsencrypt/}" != "$SSLKEY" ]; then
+    echo /etc/letsencrypt
+  else
+    echo "$SSLCERT"
+    echo "$SSLKEY"
+  fi
 }
 
 ssl_settings() {
