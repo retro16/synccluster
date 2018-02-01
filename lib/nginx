@@ -58,8 +58,10 @@ nginx_ready() {
 }
 
 nginx_setfqdn() {
-  nginx proxy_conf > /etc/nginx/sites-available/proxy
-  systemctl reload nginx
+  if nginx ready; then
+    nginx proxy_conf > /etc/nginx/sites-available/proxy
+    systemctl reload nginx
+  fi
 }
 
 nginx_proxy_conf() {
