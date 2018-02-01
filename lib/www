@@ -45,6 +45,9 @@ www_setup() {
   syspackage php-gd /usr/share/php*/gd/gd.ini
   syspackage php-imap /usr/share/php*/imap/imap.ini
   syspackage php-pgsql /usr/share/php*/pgsql/pgsql.ini
+  syspackage php-zip /usr/share/php*/zip/zip.ini
+  syspackage php-xml /usr/share/php*/xml/xml.ini
+  syspackage php-mbstring /usr/share/php*/mbstring/mbstring.ini
 
   a2enmod proxy
   a2enmod proxy_http
