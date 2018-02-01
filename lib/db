@@ -203,6 +203,7 @@ db_getpw() {
 }
 
 db_ready() {
+  syspackage net-tools netstat
   if [ "$PGVERSION" ] && ls "/usr/lib/postgresql/$PGVERSION/bin/postgres" &>/dev/null && netstat -platun | grep -E ":5432.*LISTEN.*postgres" &>/dev/null; then
     return 0
   fi
