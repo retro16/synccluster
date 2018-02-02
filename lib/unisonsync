@@ -66,7 +66,7 @@ unisonsync_restore() {
   settings save
   unisonsync common_profile > "$UNISON/_common.prf"
 
-  for f in "$UNISON"/*:*:*.prf; do
+  for f in $(ls "$UNISON"/*:*:*.prf 2>/dev/null); do
     local host="$(basename "$f" | cut -d: -f2)"
     sshlink add "$host"
   done
