@@ -136,7 +136,7 @@ settings_source_version() {
     exit 1
   fi
 
-  local v="$(sed -n '/WWWDIR/s/[^=]*='\''\(.*\)'\''/\1/p' < "$source"/"$SC")"
+  local v="$(sed -n '/SCVERSION/s/[^=]*='\''\(.*\)'\''/\1/p' < "$source"/"$SC")"
   if ! [ "$v" ]; then
     v="$SCVERSION"
   fi
