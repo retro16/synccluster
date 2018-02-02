@@ -192,14 +192,17 @@ backup_restorefrom() {
     local mod="$1"; shift
 
     if listhas restored "$mod"; then
+      echo "Already restored $mod"
       return 0
     fi
 
     require "$mod"
     local dep
     for dep in $(moddeps "$mod"); do
+      echo "Restoring dependency $dep"
       backup__restoremod "$dep"
     done
+    echo "Dependencies for $mod restored"
 
     if cancall "$mod" restore; then
       echo "Restoring module $mod ..."
