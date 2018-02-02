@@ -214,7 +214,7 @@ backup_restorefrom() {
 
   local mod
   for mod in $(modlist); do
-    if backup contains "$source" "$mod"; then
+    if cancall "$mod" restore || backup contains "$source" "$mod"; then
       backup__restoremod "$mod"
     else
       echo "No data found for $mod"
