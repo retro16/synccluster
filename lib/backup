@@ -197,11 +197,14 @@ backup_restorefrom() {
   for mod in $(modlist); do
     require "$mod"
     if cancall "$mod" restore; then
+      echo "Restoring module $mod ..."
       "$mod" restore "$source" "$source_version"
     elif backup contains "$source" "$mod"; then
+      echo "Restoring module data for $mod ..."
       backup restoremodule "$mod" "$source"
     fi
   done
+  echo "Restore finished."
   upgrade_modules "$source_version" "$SCVERSION"
   SETTING_VERSION="$SCVERSION"
   settings save
