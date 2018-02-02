@@ -191,7 +191,7 @@ backup_restorefrom() {
   backup__restoremod() {
     local mod="$1"; shift
 
-    if listhas "$restored" "$mod"; then
+    if listhas restored "$mod"; then
       return 0
     fi
 
