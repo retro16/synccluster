@@ -186,26 +186,41 @@ backup_restorefrom() {
   require settings
   local source_version="$(settings source_version "$source")"
 
-#  if [ -e "$source/$SC" ]; then
-#    syspackage dialog dialog
-#    if dialog --yesno "Restore all SC settings ? This will overwrite $SCSETTINGS" 0 0; then
-#      cp "$source/$SC" "$SCSETTINGS"
-#      source "$SCSETTINGS"
-#    fi
-#  fi
+  local restored=""
 
-  for mod in $(modlist); do
+  backup__restoremod() {
+    local mod="$1"; shift
+
+    if listhas "$restored" "$mod"; then
+      return 0
+    fi
+
     require "$mod"
+    local dep
+    for dep in $(moddeps "$mod"); do
+      backup__restoremod "$dep"
+    done
+
     if cancall "$mod" restore; then
       echo "Restoring module $mod ..."
       "$mod" restore "$source" "$source_version"
-    else #if backup contains "$source" "$mod"; then
+      listadd restored "$mod"
+    else
       echo "Restoring module data for $mod ..."
       backup restoremodule "$mod" "$source"
-#    else
-#      echo "No data found for $mod"
+      listadd restored "$mod"
+    fi
+  }
+
+  local mod
+  for mod in $(modlist); do
+    if backup contains "$source" "$mod"; then
+      backup__restoremod "$mod"
+    else
+      echo "No data found for $mod"
     fi
   done
+
   echo "Restore finished."
   upgrade_modules "$source_version" "$SCVERSION"
   SETTING_VERSION="$SCVERSION"
