@@ -58,8 +58,12 @@ unisonsync_restore() {
   require settings
   require sshlink
   settings import "$source" unisonsync
+  if [ "$UNISON" ]; then
+    [ -d "$UNISON" ] || mkdir -p "$UNISON"
+  else
+    settings prompt_path UNISON "/var/lib/unison" "Enter the UNISON base directory:"
+  fi
   settings save
-  [ -d "$UNISON" ] || mkdir -p "$UNISON"
   unisonsync common_profile > "$UNISON/_common.prf"
 
   for f in "$UNISON"/*:*:*.prf; do
