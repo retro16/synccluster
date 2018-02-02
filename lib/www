@@ -65,7 +65,6 @@ www_setup() {
 }
 
 www_files() {
-  echo /etc/php/7.0/apache2/php.ini
   echo "$WWWDIR/html"
 }
 
