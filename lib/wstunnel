@@ -37,10 +37,11 @@ wstunnel_requires() {
 
 wstunnel_setup() {
   require nginx setup
-  syspackage nodejs-legacy node
-  syspackage npm npm
   npm install -g wstunnel
   daemon add wstunnel
+
+  require aptpackage
+  aptpackage install_node
 
   settings set WSTUNNEL_MODE server
   settings save

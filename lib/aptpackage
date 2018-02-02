@@ -42,6 +42,16 @@ deb-src $MIRROR $DISTNAME contrib non-free
 EOF
 
   apt update
+
+  aptpackage install_node
+}
+
+aptpackage_install_node() {
+  if ! which npm &>/dev/null; then
+    wget -qO- https://deb.nodesource.com/setup_9.x | bash -
+    apt update
+    apt install nodejs
+  fi
 }
 
 aptpackage_cleanup() {
