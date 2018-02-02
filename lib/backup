@@ -214,6 +214,7 @@ backup_restorefrom() {
 
   local mod
   for mod in $(modlist); do
+    require "$mod"
     if cancall "$mod" restore || backup contains "$source" "$mod"; then
       backup__restoremod "$mod"
     else
