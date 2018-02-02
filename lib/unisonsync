@@ -59,10 +59,10 @@ unisonsync_restore() {
   require sshlink
   settings import "$source" unisonsync
   settings save
-  [ -d "$UNISON" ] || mkdir -p
+  [ -d "$UNISON" ] || mkdir -p "$UNISON"
   unisonsync common_profile > "$UNISON/_common.prf"
 
-  for f in "$UNISON"/*:*.prf; do
+  for f in "$UNISON"/*:*:*.prf; do
     local host="$(basename "$f" | cut -d: -f2)"
     sshlink add "$host"
   done
