@@ -199,11 +199,11 @@ backup_restorefrom() {
     if cancall "$mod" restore; then
       echo "Restoring module $mod ..."
       "$mod" restore "$source" "$source_version"
-    elif backup contains "$source" "$mod"; then
+    else #if backup contains "$source" "$mod"; then
       echo "Restoring module data for $mod ..."
       backup restoremodule "$mod" "$source"
-    else
-      echo "No data found for $mod"
+#    else
+#      echo "No data found for $mod"
     fi
   done
   echo "Restore finished."
