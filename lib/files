@@ -54,12 +54,12 @@ files_source_contains() {
   fi
 
   for f in $("$mod" files); do
-    if ! [ -e "$source"/fs"$f" ]; then
-      return 1
+    if [ -e "$source"/fs"$f" ]; then
+      return 0
     fi
   done
 
-  return 0
+  return 1
 }
 
 # Restore files from a local backup
