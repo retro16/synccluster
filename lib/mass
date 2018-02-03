@@ -28,12 +28,14 @@ LICENSE
 ###############################################################################
 
 
+export MASSDIR="/srv/mass"
+
 mass_requires() {
   echo settings
 }
 
 mass_setup() {
-  settings prompt_path MASSDIR "/srv/mass" "Mass storage directory path"
+  [ -d "$MASSDIR" ] || mkdir -p "$MASSDIR"
 
   if ! has master || [ "$(master mode)" = "master" ]; then
     settings set MASSMODE separated

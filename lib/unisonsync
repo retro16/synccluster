@@ -28,6 +28,8 @@ LICENSE
 ###############################################################################
 
 
+export UNISON="/var/lib/unison"
+
 unisonsync_requires() {
   echo settings
   echo sshlink
@@ -35,7 +37,7 @@ unisonsync_requires() {
 
 unisonsync_setup() {
   syspackage unison unison
-  settings prompt_path UNISON "/var/lib/unison" "Enter the UNISON base directory:"
+  [ -d "$UNISON" ] || mkdir -p "$UNISON"
   unisonsync common_profile > "$UNISON/_common.prf"
   settings save
 }

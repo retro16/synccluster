@@ -30,6 +30,7 @@ LICENSE
 
 cloud_version="12.0.4"
 cloud_url="https://download.nextcloud.com/server/releases/nextcloud-${cloud_version}.zip"
+CLOUDDIR="/srv/cloud"
 
 cloud_requires() {
   echo settings
@@ -46,6 +47,7 @@ cloud_setup() {
   settings prompt_path CLOUDDIR "/srv/cloud" "Owncloud storage path"
   syspackage smbclient smbclient
 
+  [ -d "$CLOUDDIR" ] || mkdir -p "$CLOUDDIR"
   chown -R www-data:www-data "$CLOUDDIR"
 
   [ -e "$WWWDIR/cloud" ] || cloud get

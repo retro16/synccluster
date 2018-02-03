@@ -28,6 +28,8 @@ LICENSE
 ###############################################################################
 
 
+export MAILDIR="/var/mail"
+
 mail_requires() {
   echo ssl
   echo user
@@ -46,11 +48,11 @@ mail_setup() {
   syspackage spamassassin spamassassin
   syspackage re2c re2c
 
-  settings prompt_path MAILDIR "/var/mail" "Enter mail directory:"
   settings prompt SPAMMAILDIR "Junk" "Name of the SPAM mail directory:"
   settings prompt HAMMAILDIR "Good" "Name of the HAM mail directory (email known as good):"
   settings prompt RELAYHOST "" "Email relay host (leave blank to send directly):"
 
+  [ -d "$MAILDIR" ] || mkdir -p "$MAILDIR"
   chmod 1777 "$MAILDIR"
 
   mail postfix_conf > "/etc/postfix/main.cf"

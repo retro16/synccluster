@@ -28,9 +28,10 @@ LICENSE
 ###############################################################################
 
 
+KODIDIR="/var/lib/kodi"
+
 media_setup() {
   require settings
-  settings prompt_path KODIDIR "/var/lib/kodi" "Kodi home directory"
   rm -r "$KODIDIR" # The directory must not exist so home directory creation works.
   settings prompt_bool RETROARCH "true" "Install RetroArch ?"
   settings save

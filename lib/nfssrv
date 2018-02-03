@@ -53,3 +53,7 @@ nfssrv_ready() {
   fi
   return 1
 }
+
+nfssrv_contains() {
+  return 1
+}

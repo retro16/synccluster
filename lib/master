@@ -466,3 +466,8 @@ master_settings() {
   echo MASTER
   echo MASTER_MODE
 }
+
+master_contains() {
+  return 1
+}
+

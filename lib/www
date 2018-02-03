@@ -28,6 +28,8 @@ LICENSE
 ###############################################################################
 
 
+export WWWDIR="/var/www"
+
 www_requires() {
   echo settings
   echo nginx
@@ -60,7 +62,6 @@ www_setup() {
   systemctl enable apache2
   systemctl restart apache2
 
-  WWWDIR=/var/www
   settings save
 }
 
@@ -151,8 +152,4 @@ www_ready() {
     return 0
   fi
   return 1
-}
-
-www_settings() {
-  echo WWWDIR
 }
