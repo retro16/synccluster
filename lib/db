@@ -108,7 +108,7 @@ db_source_contains() {
 
   require "$mod"
   if ! cancall "$mod" db; then
-    return 1
+    return 0
   fi
 
   [ -r "$source/db/$("$mod" db).xz" ]

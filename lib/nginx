@@ -47,7 +47,7 @@ nginx_setup() {
 }
 
 nginx_cleanup() {
-  rm /etc/nginx/sites-enabled/proxy /etc/nginx/sites-enabled/proxy
+  rm /etc/nginx/sites-available/proxy /etc/nginx/sites-enabled/proxy
 }
 
 nginx_ready() {
