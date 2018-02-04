@@ -367,13 +367,13 @@ user_restore() {
       # Restore missing user
       echo "$user:$pass:$uid:$gid:$name:$homedir:$shell" >> "$TEMP_FILE/passwd"
       grep -E "^$user:" "$source/fs/etc/shadow" >> "$TEMP_FILE/shadow"
+    fi
 
-      # Restore home directory data
-      if [ -e "$source/fs/$homedir" ] && ! [ -e "$homedir" ]; then
-        rsync -Pa "$source/fs/$homedir/" "$homedir/"
-      else
-        echo "Warning: could not restore home directory of user $user"
-      fi
+    # Restore home directory data
+    if [ -e "$source/fs/$homedir" ] && ! [ -e "$homedir" ]; then
+      rsync --delete -Pa "$source/fs/$homedir/" "$homedir/"
+    else
+      echo "Warning: could not restore home directory of user $user"
     fi
   done
 
