@@ -75,6 +75,3 @@ update_settings() {
   echo SCUPDATEURL
 }
 
-update_contains() {
-  return 1
-}

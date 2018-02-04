@@ -54,23 +54,16 @@ unisonsync__remotesetup() {
 }
 
 unisonsync_restore() {
-  local source="'$1"; shift
+  local source="$1"; shift
 
-  syspackage unison unison
-  require settings
-  require sshlink
-  settings import "$source" unisonsync
-  if [ "$UNISON" ]; then
-    [ -d "$UNISON" ] || mkdir -p "$UNISON"
-  else
-    settings prompt_path UNISON "/var/lib/unison" "Enter the UNISON base directory:"
-  fi
-  settings save
-  unisonsync common_profile > "$UNISON/_common.prf"
+  require unison setup
+  require files
+
+  files restoremodule unison "$1"
 
   for f in $(ls "$UNISON"/*:*:*.prf 2>/dev/null); do
     local host="$(basename "$f" | cut -d: -f2)"
-    sshlink add "$host"
+    unison__remotesetup "$host"
   done
 }
 
@@ -157,7 +150,7 @@ unisonsync_ready() {
 }
 
 unisonsync_files() {
-  ls -NU "$UNISON"/[^_.]*.prf 2>/dev/null || true
+  ls -NU "$UNISON"/*:*:*.prf 2>/dev/null || true
 }
 
 # Synchronize profiles from a remote host

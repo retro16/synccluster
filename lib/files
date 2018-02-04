@@ -42,26 +42,6 @@ files_pull() {
   fi
 }
 
-# Tells if a source directory contains files for a module
-files_source_contains() {
-  local source="$1"; shift
-  local mod="$1"; shift
-
-  require "$mod"
-  if ! cancall "$mod" files; then
-    # No files
-    return 0
-  fi
-
-  for f in $("$mod" files); do
-    if [ -e "$source"/fs"$f" ]; then
-      return 0
-    fi
-  done
-
-  return 1
-}
-
 # Restore files from a local backup
 files_restoremodule() {
   local module="$1"; shift

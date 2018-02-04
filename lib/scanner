@@ -154,7 +154,3 @@ scanner_files() {
     fi
   fi
 }
-
-scanner_contains() {
-  return 1
-}

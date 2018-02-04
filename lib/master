@@ -85,6 +85,10 @@ master_setup() {
 
   settings save
 
+  if has mass; then
+    mass cleanup
+  fi
+
   require utils setup
   case "$(master mode)" in
     "master")
@@ -198,6 +202,10 @@ master_promote() {
           crontask del master daily
           crontask del master fast
           settings del MASTER
+          if has mass; then
+            mass cleanup
+            mass setup
+          fi
           ;;
         *)
           master__unsupported "$newmode"
@@ -215,6 +223,10 @@ master_promote() {
           require crontask
           crontask add master daily
           crontask add master fast
+          if has mass; then
+            mass cleanup
+            mass setup
+          fi
           ;;
         *)
           master__unsupported "$newmode"
@@ -227,6 +239,10 @@ master_promote() {
           nfsclient del "$MASTER" /home
           require user
           user cleanup_local
+          if has mass; then
+            mass cleanup
+            mass setup
+          fi
           master pull
           ;;
         *)
@@ -240,6 +256,10 @@ master_promote() {
           nfsclient add "$MASTER" /home
           require user
           user cleanup_local
+          if has mass; then
+            mass cleanup
+            mass setup
+          fi
           ;;
         *)
           master__unsupported "$newmode"
@@ -465,9 +485,5 @@ master_status() {
 master_settings() {
   echo MASTER
   echo MASTER_MODE
-}
-
-master_contains() {
-  return 1
 }
 

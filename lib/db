@@ -80,38 +80,13 @@ db_restorestream() {
   popd &>/dev/null
 }
 
-db_restoremodule() {
-  local module="$1"; shift
-  local source="$1"; shift
-
-  require "$module"
-
-  # Check if the module has a db
-  if ! cancall "$module" db; then return 0; fi
-
-  local dbname
-  local dbfile
-  for dbname in "$("$module" db)"; do
-    dbfile="$source/db/$dbname.xz"
-    if [ -e "$dbfile" ]; then
-      db restorestream < "$dbfile"
-    else
-      echo "Error: Backup of database $dbname missing"
-      exit 2
-    fi
-  done
-}
-
-db_source_contains() {
-  local source="$1"; shift
-  local mod="$1"; shift
-
-  require "$mod"
-  if ! cancall "$mod" db; then
-    return 0
+db_restore() {
+  local file="$1"; shift
+  if [ -r "$file" ]; then
+    db restorestream < "$file"
+  else
+    echo "Cannot read database dump $file"
   fi
-
-  [ -r "$source/db/$("$mod" db).xz" ]
 }
 
 db_add() {

@@ -434,20 +434,6 @@ media_settings() {
   echo RETROARCHDIR
 }
 
-media_restore() {
-  local source="$1"; shift
-  require files
-
-  if ! [ "$KODIDIR" ]; then
-    return 0
-  fi
-
-  adduser --home "$KODIDIR" --disabled-password --gecos "Kodi user for ${SC},,," kodi
-  files restoremodule media "$source"
-
-  systemctl restart lightdm
-}
-
 media_upgrade_1006() {
   settings set RETROARCHDIR "$KODIDIR/retroarch"
 }

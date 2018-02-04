@@ -50,7 +50,6 @@ ssl_setup() {
 
 ssl_restore() {
   local source="$1"; shift
-  local source_version="$1"; shift
 
   require settings
   require files

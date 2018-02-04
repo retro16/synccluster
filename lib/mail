@@ -229,17 +229,6 @@ EOF
   newaliases
 }
 
-mail_restore() {
-  local source="$1"; shift
-  require backup
-
-  backup restoremodule mail "$source"
-
-  newaliases
-  systemctl restart dovecot
-  systemctl restart postfix
-}
-
 mail_settings() {
   echo MAILDIR
   echo SPAMMAILDIR

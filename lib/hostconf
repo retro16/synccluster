@@ -44,10 +44,6 @@ hostconf_domain() {
   echo "${FQDN#*.}"
 }
 
-hostconf_restore() {
-  return 0
-}
-
 hostconf_fqdn() {
   echo "$FQDN"
 }
