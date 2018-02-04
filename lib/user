@@ -370,7 +370,7 @@ user_restore() {
 
       # Restore home directory data
       if [ -e "$source/fs/$homedir" ] && ! [ -e "$homedir" ]; then
-        rsync -Pa "$source/fs/$homedir" "$homedir"
+        rsync -Pa "$source/fs/$homedir/" "$homedir/"
       else
         echo "Warning: could not restore home directory of user $user"
       fi
