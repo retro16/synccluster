@@ -29,6 +29,7 @@ LICENSE
 
 
 roundcube_version="1.3.4"
+roundcube_url="https://github.com/roundcube/roundcubemail/releases/download/$roundcube_version/roundcubemail-$roundcube_version-complete.tar.gz"
 
 roundcube_requires() {
   echo hostconf
@@ -84,8 +85,6 @@ roundcube_sync() {
 }
 
 roundcube_download() {
-  local roundcube_url="http://downloads.sourceforge.net/project/roundcubemail/roundcubemail/$roundcube_version/roundcubemail-$roundcube_version-complete.tar.gz"
-
   syspackage wget wget
   syspackage tar tar
   syspackage gzip gzip
