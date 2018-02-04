@@ -79,13 +79,6 @@ mass_setup_sync() {
 }
 
 mass_cleanup() {
-  mass cleanup_sync
-  require settings
-  unset MASSDIR
-  settings save
-}
-
-mass_cleanup_sync() {
   case "$MASSMODE" in
     separated)
       break
@@ -110,7 +103,7 @@ mass_cleanup_sync() {
 }
 
 mass_ready() {
-  [ "$MASSDIR" ] && [ -d "$MASSDIR" ] && isbool MASSBACKUP && [ "$MASSMODE" ]
+  [ -d "$MASSDIR" ] && isbool MASSBACKUP && [ "$MASSMODE" ]
 }
 
 mass_files() {
@@ -122,7 +115,6 @@ mass_files() {
 }
 
 mass_settings() {
-  echo MASSDIR
   echo MASSBACKUP
   echo MASSMODE
 }
