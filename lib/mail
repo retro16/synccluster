@@ -141,7 +141,7 @@ DEFAULT=\${EPREFIX}$MAILDIR/\$LOGNAME/Maildir/
 
 :0:
 * ^X-Spam-Status: Yes
-${EPREFIX}/var/mail/$LOGNAME/Maildir/$SPAMMAILDIR/
+\${EPREFIX}/var/mail/\$LOGNAME/Maildir/$SPAMMAILDIR/
 EOF
 }
 
